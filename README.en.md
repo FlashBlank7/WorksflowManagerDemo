@@ -60,7 +60,19 @@ eval "$(guanjia completion bash)"   # Tab completion (zsh works too)
   build tracking, dashboards, auto-rendered run forms, run timelines with
   artifact downloads
 
-## Knowing when things fail
+## Finding what broke — and fixing it
+
+**Health check**: `guanjia doctor` names the workflows that are broken (all runs
+failed in the window, or a recent failure streak) or stalled (scheduled but never
+ran), each with the reason from its last failure. The same report shows up in
+`guanjia today`, the web dashboard, and in chat ("anything broken?").
+
+**Repair**: say "X is broken, fix it" in chat — the builder works **on the existing
+workflow** (it reads the current draft rather than starting over), uses the failure
+reason as its lead, adds an acceptance case covering that failure, and republishes.
+In practice it also finds related defects the error message never mentioned.
+
+**Alerting**: three layers, use what fits:
 
 1. **Away**: set `ALERT_WEBHOOK_URL` on the backend — any failed run POSTs
    `{workflow, run_id, error, at}` to your DingTalk/Feishu/Slack webhook
