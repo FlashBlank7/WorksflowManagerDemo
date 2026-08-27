@@ -27,6 +27,8 @@ class StubApi(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/v1/applications/app-1/runs"):
             self._json(200, [{"id": "rfail0001aaaa", "status": "failed"},
                              {"id": "rok0002bbbb", "status": "succeeded"}])
+        elif self.path == "/api/v1/applications/app-1":
+            self._json(200, {"id": "app-1", "name": "改名后的工作流", "active_version": 3})
         elif self.path == "/api/v1/runs/rfail0001aaaa":
             self._json(200, {"id": "rfail0001aaaa", "application_id": "app-1",
                              "state": {"inputs": {"month": "2026-08"}}})
@@ -99,6 +101,18 @@ class RerunTest(unittest.TestCase):
             code = runcmd.rerun_main(["r"])
         self.assertEqual(code, 2)
         self.assertIn("没找到唯一", err.getvalue())
+
+    def test_rerun_reports_workflow_name(self):
+        """重跑要说清跑的是哪个工作流，名字取应用行当前名（非发布快照旧名）。"""
+        result = workflow.rerun(self.remote, "rfail0001aaaa")
+        self.assertEqual(result["workflow"], "改名后的工作流")
+
+    def test_cli_rerun_prints_name(self):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = runcmd.rerun_main(["rfail"])
+        self.assertEqual(code, 0, err.getvalue())
+        self.assertIn("改名后的工作流", out.getvalue())
 
 
 if __name__ == "__main__":

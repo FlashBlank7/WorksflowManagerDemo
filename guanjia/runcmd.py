@@ -171,7 +171,8 @@ def rerun_main(argv: list[str]) -> int:
         print(json.dumps(result, ensure_ascii=False))
     else:
         mark = {"succeeded": "✓", "failed": "✕", "running": "…"}.get(result["status"], "?")
-        print(f"{mark} 重跑 {run_id[:8]} → run {result['run_id']} · {result['status']}")
+        label = f"{result.get('workflow') or '工作流'} · " if result.get("workflow") else ""
+        print(f"{mark} {label}重跑 {run_id[:8]} → run {result['run_id']} · {result['status']}")
         for key, value in (result["outputs"] or {}).items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
             print(f"  {key} = {text[:500]}")

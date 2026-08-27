@@ -153,8 +153,15 @@ def rerun(remote: RemoteClient, run_id: str, wait_seconds: float = 45.0) -> dict
     old = remote.request("GET", f"/api/v1/runs/{run_id}")
     app_id = str(old.get("application_id") or "")
     inputs = (old.get("state") or {}).get("inputs") or {}
+    workflow_name = ""
+    try:  # 名字取应用行的当前名——发布版快照里可能是改名前的旧名
+        app = remote.request("GET", f"/api/v1/applications/{app_id}")
+        workflow_name = str(app.get("name") or "")
+    except RemoteError:
+        pass
     result = run(remote, app_id, inputs, wait_seconds=wait_seconds)
     result["application_id"] = app_id
+    result["workflow"] = workflow_name
     result["inputs"] = inputs
     return result
 
