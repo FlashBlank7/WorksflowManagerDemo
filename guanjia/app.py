@@ -36,6 +36,31 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:
         pass
 
+    def _proxy_artifact(self, rest: str) -> None:
+        """二进制透传：/<run_id>/<产物路径> → 远端下载端点（带令牌）。"""
+        import urllib.error
+        import urllib.request
+
+        run_id, _, art_path = rest.partition("/")
+        remote = self._need_remote()
+        request = urllib.request.Request(
+            f"{remote.server}/api/v1/runs/{run_id}/artifacts/{art_path}",
+            headers={"Authorization": f"Bearer {remote.token}"})
+        try:
+            with urllib.request.urlopen(request, timeout=120) as resp:
+                data = resp.read()
+                self.send_response(200)
+                self.send_header("Content-Type",
+                                 resp.headers.get("Content-Type") or "application/octet-stream")
+                disposition = resp.headers.get("Content-Disposition")
+                if disposition:
+                    self.send_header("Content-Disposition", disposition)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+        except urllib.error.HTTPError as error:
+            self._json({"error": f"remote {error.code}"}, error.code)
+
     def _json(self, data, code: int = 200) -> None:
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -102,6 +127,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(workflow.run_events(self._need_remote(), self.path.rsplit("/", 1)[1]))
             elif self.path.startswith("/api/workflow/export/"):
                 self._json(workflow.export_snapshot(self._need_remote(), self.path.rsplit("/", 1)[1]))
+            elif self.path.startswith("/api/workflow/artifacts/"):
+                self._json(workflow.run_artifacts(self._need_remote(), self.path.rsplit("/", 1)[1]))
+            elif self.path.startswith("/api/workflow/artifact/"):
+                self._proxy_artifact(self.path[len("/api/workflow/artifact/"):])
             else:
                 self._json({"error": "not found"}, 404)
         except RemoteError as error:

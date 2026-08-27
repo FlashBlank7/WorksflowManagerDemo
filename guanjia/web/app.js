@@ -223,8 +223,14 @@ async function toggleEvents(id,row){const box=$('ev-'+id);if(!box)return;
           '<span class="ev-at">'+esc(e.at)+'</span>'+
           '<span class="ev-ty">'+esc(e.type)+'</span>'+
           '<span class="ev-tx">'+esc(e.label)+(e.extra?' · '+esc(e.extra):'')+'</span></div>'}).join('')
-        :'<div class="ev-row"><span class="ev-tx">没有事件记录</span></div>'}
+        :'<div class="ev-row"><span class="ev-tx">没有事件记录</span></div>';
+      try{const arts=await api('/api/workflow/artifacts/'+id);
+        if(arts.length){box.innerHTML+='<div class="ev-arts">'+arts.map(a=>
+          '<a class="art" href="/api/workflow/artifact/'+id+'/'+a.name.split('/').map(encodeURIComponent).join('/')+'" download>⬇ '+esc(a.name)+' <i>'+fmtSize(a.size)+'</i></a>').join('')+'</div>'}}
+      catch(e){}}
     catch(e){box.innerHTML='<div class="ev-row bad"><span class="ev-tx">'+esc(e.message)+'</span></div>';delete box.dataset.loaded}}}
+function fmtSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';
+  return (n/1048576).toFixed(1)+' MB'}
 async function importWf(input){const file=input.files&&input.files[0];if(!file)return;
   input.value='';
   let payload;

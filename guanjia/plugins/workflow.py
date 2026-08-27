@@ -265,3 +265,8 @@ def import_snapshot(remote: RemoteClient, payload: dict,
     return {"app_id": app_id, "name": app_name, "revision": revision,
             "published": published, "publish_error": publish_error,
             "skipped_tests": skipped_tests}
+
+
+def run_artifacts(remote: RemoteClient, run_id: str) -> list[dict]:
+    """一次运行落盘的产物文件（name/size），没有则空表。"""
+    return remote.request("GET", f"/api/v1/runs/{run_id}/artifacts")
