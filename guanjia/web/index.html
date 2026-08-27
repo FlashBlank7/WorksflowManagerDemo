@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>管家 guanjia</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="login">
+  <div class="login-card">
+    <div class="logo"><i>▸</i><b>管家</b></div>
+    <p>本地工作台 · 所有能力由远端平台提供</p>
+    <label>远端平台地址</label>
+    <input id="lg-server" placeholder="http://服务器:8000" value="">
+    <label>用户名</label>
+    <input id="lg-name" placeholder="你的用户名">
+    <label>密码</label>
+    <input id="lg-pass" type="password" placeholder="至少 6 位">
+    <div id="lg-reg-row" style="display:none">
+      <label>注册令牌</label>
+      <input id="lg-reg" type="password" placeholder="团队共享的注册令牌">
+    </div>
+    <button class="go" id="lg-go" onclick="saveConfig()">登录</button>
+    <div style="text-align:center;margin-top:12px">
+      <a href="#" id="lg-switch" onclick="toggleMode();return false"
+         style="font-size:12.5px;color:var(--accent);text-decoration:none">没有账号？注册（首个注册者自动成为管理员）</a>
+    </div>
+    <div class="login-err" id="lg-err"></div>
+  </div>
+</div>
+
+<div id="shell">
+  <aside>
+    <div class="logo"><i>▸</i><b>管家</b></div>
+    <button class="nav-btn act" id="nav-chat" onclick="show('chat')"><span class="ic">💬</span>对话</button>
+    <button class="nav-btn" id="nav-ov" onclick="show('ov')"><span class="ic">📊</span>总览</button>
+    <button class="nav-btn" id="nav-wf" onclick="show('wf')"><span class="ic">⚙️</span>工作流</button>
+    <div class="spacer"></div>
+    <div class="user-chip"><div class="dot" id="u-dot">?</div>
+      <div class="who"><b id="u-name">…</b><small id="u-role"></small></div></div>
+    <div class="conn-note" id="conn-note"></div>
+  </aside>
+  <main>
+    <div id="view-chat" class="act">
+      <div class="chat-scroll" id="chat-scroll"><div class="chat-col" id="chat-col">
+        <div class="chat-empty"><div class="big">💬</div>问点什么——回答由远端服务生成</div>
+      </div></div>
+      <div class="composer">
+        <div class="inner">
+          <textarea id="chat-input" rows="1" placeholder="输入消息，Enter 发送"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
+          <button class="send" onclick="send()">↑</button>
+        </div>
+        <div class="hint">本地不运行模型；对话内容发送至远端平台处理</div>
+      </div>
+    </div>
+    <div id="view-ov" class="view-page" style="flex:1;display:none;overflow-y:auto;padding:26px 28px">
+      <div class="wf-col">
+        <div class="stat-row" id="ov-stats"></div>
+        <div class="section-head"><h2>定时任务</h2></div>
+        <div class="detail" style="margin-top:0;padding:6px 20px" id="ov-schedules"></div>
+        <div class="section-head"><h2>近期失败</h2></div>
+        <div class="detail" style="margin-top:0;padding:6px 20px" id="ov-failures"></div>
+      </div>
+    </div>
+    <div id="view-wf"><div class="wf-col">
+      <div class="gen-card">
+        <h2>生成新工作流</h2>
+        <div class="sub">用业务语言描述需求，远端莉莉丝自动搭建、测试、发布</div>
+        <textarea id="gen-req" placeholder="例如：输入一段中文文本，输出一句话摘要和字数统计"></textarea>
+        <div class="gen-row">
+          <label><input type="checkbox" id="gen-think"> 深度思考</label>
+          <select id="gen-effort"><option value="low">快速档</option><option value="medium">均衡档</option><option value="high">深思档</option></select>
+          <span style="flex:1"></span>
+          <button class="primary" id="gen-btn" onclick="generate()">开始生成</button>
+        </div>
+        <div class="gen-progress" id="gen-progress"></div>
+      </div>
+      <div class="section-head"><h2>我的工作流</h2><span class="count" id="wf-count"></span>
+        <div class="tools">
+          <input class="search" id="wf-search" placeholder="搜索…" oninput="renderList()">
+          <button class="chip-toggle on" id="wf-pub" onclick="togglePub()">只看已发布</button>
+        </div></div>
+      <div class="wf-grid" id="wf-list"></div>
+      <div id="wf-detail"></div>
+    </div></div>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body></html>
