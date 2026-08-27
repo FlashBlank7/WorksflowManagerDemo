@@ -18,6 +18,15 @@ BAD = "\x1b[31m✕\x1b[0m"
 WARN = "\x1b[33m!\x1b[0m"
 
 
+def _scheduler_health(cfg: dict) -> dict | None:
+    """查平台调度器的死活；老远端没有这个端点就返回 None（不当成问题）。"""
+    try:
+        return RemoteClient(cfg["server"], cfg["token"], timeout=8.0).request(
+            "GET", "/api/v1/scheduler/health")
+    except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
+        return None
+
+
 def run() -> int:
     cfg = load_config()
     _, profiles = list_profiles()
@@ -87,8 +96,29 @@ def run() -> int:
                     problems.append("跑不通的那几个：在对话里说「<名字> 坏了帮我修」，"
                                     "莉莉丝会在原工作流上改")
                 if any(item.get("state") == "stale" for item in bad):
-                    problems.append("没按时开火的那几个：先手动跑一次确认工作流本身没问题"
-                                    "（guanjia run <名字>），再看平台的调度器还在不在")
+                    # 「去看看调度器还在不在」是句没法落地的建议——直接查给用户看
+                    sched = _scheduler_health(cfg)
+                    if sched is None:
+                        problems.append("没按时开火的那几个：先手动跑一次确认工作流本身"
+                                        "没问题（guanjia run <名字>）")
+                    elif sched.get("alive"):
+                        behind = sched.get("seconds_since_tick")
+                        print(f"{OK} 调度器在跑（{behind:.0f}s 前刚轮询过，"
+                              f"已轮询 {sched.get('tick_count', 0)} 轮）"
+                              if isinstance(behind, (int, float)) else
+                              f"{OK} 调度器在跑")
+                        problems.append("调度器是活的，但上面那些没按时开火——"
+                                        "多半是工作流的定时配置改过没发布：先 guanjia run <名字> "
+                                        "手动跑一次，再在对话里确认它的定时设置")
+                    else:
+                        detail = (sched.get("last_error") or "").strip()
+                        since = sched.get("seconds_since_tick")
+                        print(f"{BAD} 调度器不正常："
+                              + (f"上次轮询在 {since:.0f}s 前" if isinstance(since, (int, float))
+                                 else "从没轮询过")
+                              + (f"；{detail}" if detail else ""))
+                        problems.append("定时不开火的根因在这里：重启平台服务，"
+                                        "或看服务端日志里 scheduler.failed 事件")
         except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
             pass  # 老版本远端没这个端点：体检跳过，不算问题
 
