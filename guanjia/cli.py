@@ -64,7 +64,18 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
                 if status.get("published_version"):
                     say(f"搭好了！已发布 v{status['published_version']}——直接说「跑一下」就能用。")
                 elif status.get("pending_question"):
-                    say(f"莉莉丝在等你回答：{status['pending_question']}" + chr(10) + "（直接输入回答，我会转交）")
+                    say(f"莉莉丝在等你回答：{status['pending_question']}")
+                    try:
+                        answer = input(f"{C}❓{N} ").strip()
+                    except (KeyboardInterrupt, EOFError):
+                        print()
+                        say("先不回答也行——之后说「继续刚才的构建」再答。")
+                        return
+                    if answer:
+                        remote.request("POST", f"/api/v1/builds/{build_id}/resume", {"message": answer})
+                        say("已转交，继续跟踪。")
+                        continue
+                    say("空回答未发送——之后说「继续刚才的构建」再答。")
                 else:
                     tail = f"：{status['error']}" if status.get("error") else ""
                     say(f"构建结束（{status['status']}{tail}）——说「继续刚才的构建」可续跑。")
