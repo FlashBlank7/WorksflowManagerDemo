@@ -35,7 +35,7 @@ import json
 import sys
 
 from . import sessions
-from .config import load_config
+from .config import list_profiles, load_config, save_login, use_profile
 from .remote import RemoteClient, RemoteError
 
 G = "\033[32m"; C = "\033[36m"; D = "\033[2m"; B = "\033[1m"; R = "\033[31m"; N = "\033[0m"
@@ -87,7 +87,7 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
         print(f"{D}已停止跟踪（构建仍在远端进行，/today 或直接问我进度）{N}")
 
 
-def login_flow(server_default: str) -> RemoteClient:
+def login_flow(server_default: str, profile: str | None = None) -> RemoteClient:
     print(f"{B}连接远端平台{N}")
     server = input(f"  服务器 [{server_default}]: ").strip() or server_default
     mode = input("  登录(l) / 注册(r)? [l]: ").strip().lower() or "l"
@@ -100,9 +100,8 @@ def login_flow(server_default: str) -> RemoteClient:
                               {"register_token": reg, "name": name, "password": password})
     else:
         result = anon.request("POST", "/api/v1/auth/login", {"name": name, "password": password})
-    (Path.home() / ".guanjia.json").write_text(
-        json.dumps({"server": server, "token": result["token"]}, ensure_ascii=False), encoding="utf-8")
-    say(f"你好，{result['user']['name']}（{'管理员' if result['user']['role']=='admin' else '成员'}）")
+    pname = save_login(server, result["token"], result["user"]["name"], profile)
+    say(f"你好，{result['user']['name']}（{'管理员' if result['user']['role']=='admin' else '成员'}）· 远端档案「{pname}」")
     return RemoteClient(server, result["token"])
 
 
@@ -151,7 +150,41 @@ def main() -> None:
         if text == "/help":
             print(f"{D}直接用自然语言：跑一下GPU日报 / 有哪些工作流 / 昨天日报结果多少 /\n"
                   f"给我做一个「输入文本输出摘要」的工作流……\n"
-                  f"命令：/today 统筹总览 · /wf 工作流列表 · /new 新对话 · /login 重新登录 · /quit 退出{N}")
+                  f"命令：/today 统筹总览 · /wf 工作流列表 · /remote 多远端切换 · /new 新对话 ·\n/login 重新登录 · /quit 退出{N}")
+            continue
+        if text == "/remote" or text.startswith("/remote "):
+            parts = text.split()
+            active, profiles = list_profiles()
+            if len(parts) == 1 or parts[1] == "list":
+                if not profiles:
+                    print(f"{D}还没有远端档案。/remote add <名字> <服务器地址> 新增。{N}")
+                for pn, pr in profiles.items():
+                    print(f"  {'●' if pn == active else '○'} {pn}  {pr.get('server','')}  {pr.get('user','')}")
+                continue
+            if parts[1] == "use" and len(parts) > 2:
+                try:
+                    pr = use_profile(parts[2])
+                except KeyError:
+                    print(f"{R}没有档案「{parts[2]}」{N}")
+                    continue
+                remote = RemoteClient(pr["server"], pr.get("token", ""))
+                try:
+                    me = remote.request("GET", "/api/v1/me")["user"]
+                    say(f"已切到「{parts[2]}」（{pr['server']}），你好，{me['name']}。")
+                except RemoteError:
+                    say(f"已切到「{parts[2]}」，令牌失效，需要重新登录。")
+                    try:
+                        remote = login_flow(pr["server"], parts[2])
+                    except Exception as error:  # noqa: BLE001
+                        print(f"{R}登录失败：{error}{N}")
+                continue
+            if parts[1] == "add" and len(parts) > 2:
+                try:
+                    remote = login_flow(parts[3] if len(parts) > 3 else remote.server, parts[2])
+                except Exception as error:  # noqa: BLE001
+                    print(f"{R}登录失败：{error}{N}")
+                continue
+            print(f"{D}用法：/remote · /remote use <名> · /remote add <名> [服务器]{N}")
             continue
         if text == "/login":
             try:

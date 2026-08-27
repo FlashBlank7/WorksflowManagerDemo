@@ -15,7 +15,7 @@ from pathlib import Path
 from importlib import resources
 
 from . import sessions
-from .config import load_config
+from .config import load_config, save_login
 from .plugins import PLUGINS, assistant, workflow
 from .remote import RemoteClient, RemoteError
 
@@ -111,9 +111,7 @@ class Handler(BaseHTTPRequestHandler):
                         "password": str(body.get("password") or ""),
                     })
                 token = result["token"]  # 只存会话令牌，密码不落盘
-                (Path.home() / ".guanjia.json").write_text(
-                    json.dumps({"server": server, "token": token}, ensure_ascii=False), encoding="utf-8"
-                )
+                save_login(server, token, str((result.get("user") or {}).get("name") or ""))
                 Handler.remote = RemoteClient(server, token)
                 self._json({"ok": True, "user": result["user"]})
             elif self.path == "/api/chat/stream":
