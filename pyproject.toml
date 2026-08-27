@@ -1,18 +1,18 @@
 [project]
-name = "bench-workbench"
+name = "guanjia"
 version = "0.1.0"
-description = "终端里的工作流管家：对话式生成、运行、统筹工作流（本地薄壳 + 远端工厂）"
+description = "管家 — 终端里说人话，远端工厂替你造出能跑、有定时、可监控的工作流"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-bench = "bench.__main__:main"
+guanjia = "guanjia.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["bench"]
+packages = ["guanjia"]

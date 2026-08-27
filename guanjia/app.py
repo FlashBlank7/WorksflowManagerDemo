@@ -1,6 +1,6 @@
-"""bench 本地壳：localhost 单页界面，一切能力经插件转发远端。
+"""guanjia 本地壳：localhost 单页界面，一切能力经插件转发远端。
 
-用法：python3 -m bench.app [--port 7800]
+用法：guanjia web [--port 7800]
 首次打开进入连接页：填远端地址 + 个人令牌（管理员在平台上用
 POST /api/v1/users 为每人签发），保存于 ~/.bench.json。
 """
@@ -96,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
                         "password": str(body.get("password") or ""),
                     })
                 token = result["token"]  # 只存会话令牌，密码不落盘
-                (Path.home() / ".bench.json").write_text(
+                (Path.home() / ".guanjia.json").write_text(
                     json.dumps({"server": server, "token": token}, ensure_ascii=False), encoding="utf-8"
                 )
                 Handler.remote = RemoteClient(server, token)
@@ -121,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="bench — 本地工作台（远端服务客户端）")
+    parser = argparse.ArgumentParser(description="guanjia — 本地工作台（远端服务客户端）")
     parser.add_argument("--server", default=None)
     parser.add_argument("--token", default=None)
     parser.add_argument("--port", type=int, default=7800)
@@ -129,14 +129,14 @@ def main() -> None:
     cfg = load_config(args.server, args.token)
     if cfg["token"]:
         Handler.remote = RemoteClient(cfg["server"], cfg["token"])
-    print(f"bench: http://127.0.0.1:{args.port}")
+    print(f"guanjia: http://127.0.0.1:{args.port}")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
 
 PAGE = r"""<!DOCTYPE html>
 <html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>bench</title>
+<title>管家 guanjia</title>
 <style>
 :root{
   --bg:#f5f7fa;--panel:#ffffff;--ink:#141a22;--sub:#5c6675;--faint:#98a1af;
@@ -299,7 +299,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 
 <div id="login">
   <div class="login-card">
-    <div class="logo"><i>▸</i><b>bench</b></div>
+    <div class="logo"><i>▸</i><b>管家</b></div>
     <p>本地工作台 · 所有能力由远端平台提供</p>
     <label>远端平台地址</label>
     <input id="lg-server" placeholder="http://服务器:8000" value="">
@@ -322,7 +322,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 
 <div id="shell">
   <aside>
-    <div class="logo"><i>▸</i><b>bench</b></div>
+    <div class="logo"><i>▸</i><b>管家</b></div>
     <button class="nav-btn act" id="nav-chat" onclick="show('chat')"><span class="ic">💬</span>对话</button>
     <button class="nav-btn" id="nav-ov" onclick="show('ov')"><span class="ic">📊</span>总览</button>
     <button class="nav-btn" id="nav-wf" onclick="show('wf')"><span class="ic">⚙️</span>工作流</button>

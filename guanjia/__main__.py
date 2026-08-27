@@ -25,7 +25,7 @@ def main() -> None:
         try:
             d = RemoteClient(cfg["server"], cfg["token"]).request("GET", "/api/v1/overview")
         except RemoteError as error:
-            print(f"远端不可达或未登录：{error}\n先运行 bench --login")
+            print(f"远端不可达或未登录：{error}\n先运行 guanjia --login")
             sys.exit(1)
         rt = d["runs_today"]
         print(f"今日运行 {rt['total']}（✓{rt['succeeded']} ✕{rt['failed']}）· "

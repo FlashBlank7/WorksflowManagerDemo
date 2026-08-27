@@ -1,4 +1,4 @@
-"""远端平台客户端：bench 与世界的唯一通道（urllib，零依赖）。"""
+"""远端平台客户端：guanjia 与世界的唯一通道（urllib，零依赖）。"""
 
 from __future__ import annotations
 

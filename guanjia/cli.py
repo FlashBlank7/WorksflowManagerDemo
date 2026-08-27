@@ -1,11 +1,11 @@
-"""bench CLI —— 终端里的工作流管家（招牌特性）。
+"""guanjia CLI —— 终端里的工作流管家（招牌特性）。
 
 薄 REPL：语言理解与全部工具执行都在远端服务器（/api/v1/assistant/agent），
 本地只负责输入输出和一点点颜色。
 
 用法：
-    python3 -m bench.cli               # 读 ~/.bench.json（网页端登录过即有）
-    python3 -m bench.cli --login       # 终端里登录/注册
+    guanjia               # 读 ~/.bench.json（网页端登录过即有）
+    guanjia --login       # 终端里登录/注册
 直接说话即可（"跑一下GPU日报"/"有哪些工作流"/"给我做一个……的工作流"）。
 命令：/today 统筹总览 · /wf 列表 · /login 重新登录 · /help · /quit
 """
@@ -41,14 +41,14 @@ def login_flow(server_default: str) -> RemoteClient:
                               {"register_token": reg, "name": name, "password": password})
     else:
         result = anon.request("POST", "/api/v1/auth/login", {"name": name, "password": password})
-    (Path.home() / ".bench.json").write_text(
+    (Path.home() / ".guanjia.json").write_text(
         json.dumps({"server": server, "token": result["token"]}, ensure_ascii=False), encoding="utf-8")
     say(f"你好，{result['user']['name']}（{'管理员' if result['user']['role']=='admin' else '成员'}）")
     return RemoteClient(server, result["token"])
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="bench CLI — 工作流管家")
+    parser = argparse.ArgumentParser(description="guanjia CLI — 工作流管家")
     parser.add_argument("--login", action="store_true")
     parser.add_argument("--server", default=None)
     args = parser.parse_args()
