@@ -134,6 +134,10 @@ class Handler(BaseHTTPRequestHandler):
                     bool(body.get("thinking_enabled", False)),
                     str(body.get("effort") or "low"),
                 ))
+            elif self.path == "/api/workflow/answer":
+                self._json(self._need_remote().request(
+                    "POST", f"/api/v1/builds/{body['build_id']}/resume",
+                    {"message": str(body.get("message") or "")}))
             elif self.path == "/api/workflow/run":
                 self._json(workflow.run(self._need_remote(), body["app_id"], body.get("inputs") or {}))
             else:

@@ -51,6 +51,11 @@ async function loadOverview(){try{const d=await api('/api/overview');
 
 function renderChat(waiting){$('chat-col').innerHTML=S.messages.map((m,i)=>{
     if(m.kind==='action')return `<div style="margin:-8px 0 12px 42px;font:11.5px/1.5 ui-monospace,monospace;color:var(--faint)">⚙ ${esc(m.text)}</div>`;
+    if(m.kind==='build')return `<div style="margin:0 0 14px 42px;border-left:3px solid var(--accent-line);padding:6px 12px;font:12px/1.7 ui-monospace,monospace;color:var(--sub);white-space:pre-wrap">${esc(m.text)}</div>`;
+    if(m.kind==='answerbox')return `<div style="margin:0 0 14px 42px;display:flex;gap:8px;max-width:520px">
+      <input id="ab-input" placeholder="回答莉莉丝…" style="flex:1;border:1px solid var(--accent);border-radius:9px;padding:8px 11px"
+        onkeydown="if(event.key==='Enter')sendAnswer('${m.build_id}')">
+      <button class="primary" onclick="sendAnswer('${m.build_id}')">转交</button></div>`;
     const last=waiting&&i===S.messages.length-1;
     return `<div class="msg ${m.role==='user'?'user':'bot'}">
     <div class="av">${m.role==='user'?'我':'远'}</div>
@@ -77,13 +82,16 @@ async function send(){const t=$('chat-input').value.trim();if(!t)return;$('chat-
         if(ev.type==='delta'&&ev.text){cur().text+=ev.text;renderChat(true)}
         else if(ev.type==='action'){
           const bubble=S.messages.pop();
-          S.messages.push({role:'assistant',kind:'action',text:`${ev.tool} → ${ev.summary||''}`});
+          S.messages.push({role:'assistant',kind:'action',text:`${ev.tool} → ${ev.summary||''}`,
+            tool:ev.tool,build_id:ev.build_id});
           S.messages.push(bubble);renderChat(true)}
         else if(ev.type==='final'){cur().text=ev.text||cur().text||'(空回复)';sawFinal=true}
         else if(ev.type==='error'){throw new Error(ev.text)}
       }}
     if(!cur().text&&!sawFinal)cur().text='(空回复)';
-    renderChat(false)}
+    renderChat(false);
+    const gen=[...S.messages].reverse().find(m=>m.kind==='action'&&m.tool==='generate_workflow'&&m.build_id);
+    if(gen)followBuild(gen.build_id)}
   catch(e){
     try{const r=await api('/api/chat',{messages:historyForSend});
       cur().text=r.text||'(空回复)';renderChat(false)}
@@ -139,3 +147,38 @@ async function pollGen(){if(!S.genBuild)return;
       $('gen-btn').disabled=false;boot();return}}catch(e){}
   setTimeout(pollGen,4000)}
 boot();
+
+
+/* ── 对话内构建跟踪（切片3）：进度卡 + 提问答框 ── */
+async function followBuild(buildId){
+  if(S.followTimer)clearInterval(S.followTimer);
+  S.messages.push({role:'assistant',kind:'build',build_id:buildId,text:'跟踪构建 '+buildId.slice(0,8)+' …'});
+  const card=S.messages[S.messages.length-1];renderChat(false);
+  S.followTimer=setInterval(async()=>{
+    try{
+      const st=await api('/api/workflow/build/'+buildId);
+      let line=`${st.status} · 修订 ${st.revision??0}`;
+      if(st.narration)line+='\n'+st.narration.slice(0,80);
+      card.text='构建 '+buildId.slice(0,8)+'\n'+line;
+      if(['published','ready','needs_attention','failed','cancelled'].includes(st.status)){
+        clearInterval(S.followTimer);S.followTimer=null;
+        if(st.published_version){
+          S.messages.push({role:'assistant',text:`搭好了！已发布 v${st.published_version}——直接说「跑一下」就能用。`});
+          boot()}
+        else if(st.pending_question){
+          S.messages.push({role:'assistant',text:'莉莉丝在等你回答：'+st.pending_question});
+          S.messages.push({role:'assistant',kind:'answerbox',build_id:buildId})}
+        else{
+          S.messages.push({role:'assistant',text:`构建结束（${st.status}${st.error?'：'+st.error:''}）——说「继续刚才的构建」可续跑。`})}
+      }
+      renderChat(false)}
+    catch(e){}
+  },4000)}
+async function sendAnswer(buildId){
+  const el=document.getElementById('ab-input');const text=(el&&el.value.trim())||'';
+  if(!text)return;
+  S.messages=S.messages.filter(m=>m.kind!=='answerbox');
+  S.messages.push({role:'user',text});renderChat(false);
+  try{await api('/api/workflow/answer',{build_id:buildId,message:text});
+    S.messages.push({role:'assistant',text:'已转交，继续跟踪。'});followBuild(buildId)}
+  catch(e){S.messages.push({role:'assistant',text:'转交失败：'+e.message});renderChat(false)}}
