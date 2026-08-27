@@ -61,7 +61,24 @@ function show(v){$('view-chat').classList.toggle('act',v==='chat');
   $('nav-wf').classList.toggle('act',v==='wf');
   $('nav-ov').classList.toggle('act',v==='ov');
   if(v==='wf')boot();if(v==='ov'){$('nav-ov').classList.remove('dot');loadOverview()}}
-async function loadOverview(){try{const d=await api('/api/overview');
+function gotoWf(id){  // 从统筹页跳到工作流详情：先切视图，找不到就只切页
+  if(!(S.workflows||[]).some(w=>w.id===id)){show('wf');return}
+  show('wf');openWf(id)}
+async function loadHealth(){const box=$('ov-health');if(!box)return;
+  try{const d=await api('/api/health');
+    const bad=(d.items||[]).filter(i=>i.state!=='ok');
+    if(!bad.length){box.innerHTML='';return}
+    const c=d.counts||{};
+    box.innerHTML='<div class="section-head"><h2>需要处理</h2>'+
+      '<span class="sub">坏 '+(c.broken||0)+' · 停 '+(c.stale||0)+'</span></div>'+
+      '<div class="detail" style="margin-top:0;padding:6px 20px">'+bad.map(i=>
+        '<div class="hl-row '+(i.state==='broken'?'bad':'warn')+'" '+
+        'onclick="gotoWf(\''+i.application_id+'\')" title="点开看这个工作流">'+
+        '<span class="hl-st">'+(i.state==='broken'?'✕':'⏸')+'</span>'+
+        '<span class="hl-nm">'+esc(i.workflow)+'</span>'+
+        '<span class="hl-rs">'+esc(i.reason)+'</span></div>').join('')+'</div>'}
+  catch(e){box.innerHTML=''}}
+async function loadOverview(){loadHealth();try{const d=await api('/api/overview');
   const rt=d.runs_today;
   $('ov-stats').innerHTML=`
     <div class="stat"><div class="num">${rt.total}</div><div class="lbl">今日运行</div></div>

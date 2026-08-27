@@ -115,6 +115,14 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path.startswith("/api/sessions/"):
                 data = sessions.load(self.path.rsplit("/", 1)[1])
                 self._json(data or {"error": "not found"}, 200 if data else 404)
+            elif self.path == "/api/health":
+                try:
+                    self._json(self._need_remote().request("GET", "/api/v1/health-report"))
+                except RemoteError as error:  # 老远端没这个端点：给空体检，页面照常
+                    if error.status == 404:
+                        self._json({"days": 7, "counts": {}, "items": [], "unsupported": True})
+                    else:
+                        raise
             elif self.path == "/api/overview":
                 self._json(self._need_remote().request("GET", "/api/v1/overview"))
             elif self.path.startswith("/api/workflow/build/"):
