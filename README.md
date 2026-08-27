@@ -131,4 +131,4 @@ python3 -m guanjia                                       # 或直接跑
 python3 -m unittest discover tests                       # 回归测试（零依赖）
 ```
 
-MIT License. · [和近邻的详细对比](docs/alternatives.md)
+MIT License. · [English README](README.en.md) · [和近邻的详细对比](docs/alternatives.md)
