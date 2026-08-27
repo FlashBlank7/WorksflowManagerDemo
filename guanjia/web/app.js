@@ -1,4 +1,4 @@
-let S={messages:[],workflows:[],current:null,genBuild:null,onlyPub:true,user:null};
+let S={messages:[],workflows:[],current:null,genBuild:null,onlyPub:true,user:null,sid:null,followTimer:null};
 const $=id=>document.getElementById(id);
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
 function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}
@@ -89,7 +89,7 @@ async function send(){const t=$('chat-input').value.trim();if(!t)return;$('chat-
         else if(ev.type==='error'){throw new Error(ev.text)}
       }}
     if(!cur().text&&!sawFinal)cur().text='(空回复)';
-    renderChat(false);
+    renderChat(false);saveSession();
     const gen=[...S.messages].reverse().find(m=>m.kind==='action'&&m.tool==='generate_workflow'&&m.build_id);
     if(gen)followBuild(gen.build_id)}
   catch(e){
@@ -148,6 +148,26 @@ async function pollGen(){if(!S.genBuild)return;
   setTimeout(pollGen,4000)}
 boot();
 
+/* ── 会话持久化（切片4）：与 CLI 共享 ~/.guanjia/sessions/ ── */
+async function initSessions(){
+  try{
+    const list=await api('/api/sessions');
+    if(!S.sid)S.sid=list.length?list[0].id:Math.random().toString(16).slice(2,10);
+    const pick=$('sess-pick');
+    pick.innerHTML=list.map(x=>`<option value="${x.id}">${esc(x.title||x.id)} · ${esc(x.updated_at)}</option>`).join('')
+      +(list.some(x=>x.id===S.sid)?'':`<option value="${S.sid}">新对话</option>`);
+    pick.value=S.sid;
+    if(list.some(x=>x.id===S.sid)){
+      const data=await api('/api/sessions/'+S.sid);
+      if(data&&data.messages){S.messages=data.messages;renderChat(false)}}}
+  catch(e){}}
+function saveSession(){if(S.sid)api('/api/sessions/save',{id:S.sid,messages:S.messages}).then(initSessions).catch(()=>{})}
+async function switchSession(sid){S.sid=sid;
+  const data=await api('/api/sessions/'+sid).catch(()=>null);
+  S.messages=(data&&data.messages)||[];renderChat(false)}
+function newSession(){S.sid=Math.random().toString(16).slice(2,10);S.messages=[];renderChat(false);initSessions()}
+initSessions();
+
 
 /* ── 对话内构建跟踪（切片3）：进度卡 + 提问答框 ── */
 async function followBuild(buildId){
@@ -171,7 +191,8 @@ async function followBuild(buildId){
         else{
           S.messages.push({role:'assistant',text:`构建结束（${st.status}${st.error?'：'+st.error:''}）——说「继续刚才的构建」可续跑。`})}
       }
-      renderChat(false)}
+      renderChat(false);
+      if(!S.followTimer)saveSession()}
     catch(e){}
   },4000)}
 async function sendAnswer(buildId){
