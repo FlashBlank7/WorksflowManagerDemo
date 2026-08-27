@@ -1,6 +1,7 @@
 """guanjia 本地壳：localhost 单页界面，一切能力经插件转发远端。
 
-用法：guanjia web [--port 7800]
+用法：guanjia web [--port 7800] [--open|--app]
+--open 用默认浏览器打开；--app 以独立窗口打开（chromium 系 --app=URL，零依赖桌面壳）。
 首次打开进入连接页：填远端地址 + 个人令牌（管理员在平台上用
 POST /api/v1/users 为每人签发），保存于 ~/.bench.json。
 """
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -155,16 +157,43 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": str(error)}, 500)
 
 
+def _launch(url: str, app_mode: bool) -> None:
+    """零依赖桌面壳：chromium 系 --app 独立窗口，找不到退回默认浏览器。"""
+    if app_mode:
+        import shutil
+        import subprocess
+        for exe in ("chromium", "chromium-browser", "google-chrome",
+                    "google-chrome-stable", "microsoft-edge", "brave-browser"):
+            path = shutil.which(exe)
+            if path:
+                try:
+                    subprocess.Popen([path, f"--app={url}"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return
+                except OSError:
+                    pass
+    try:
+        import webbrowser
+        webbrowser.open(url)
+    except Exception:  # noqa: BLE001 - 无显示环境下静默，服务本身照常
+        pass
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="guanjia — 本地工作台（远端服务客户端）")
     parser.add_argument("--server", default=None)
     parser.add_argument("--token", default=None)
     parser.add_argument("--port", type=int, default=7800)
+    parser.add_argument("--open", action="store_true", help="启动后用默认浏览器打开")
+    parser.add_argument("--app", action="store_true", help="启动后以独立窗口打开（chromium 系）")
     args = parser.parse_args()
     cfg = load_config(args.server, args.token)
     if cfg["token"]:
         Handler.remote = RemoteClient(cfg["server"], cfg["token"])
-    print(f"guanjia: http://127.0.0.1:{args.port}")
+    url = f"http://127.0.0.1:{args.port}"
+    if args.open or args.app:
+        threading.Timer(0.6, _launch, args=(url, args.app)).start()
+    print(f"guanjia: {url}")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
 

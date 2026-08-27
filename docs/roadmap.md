@@ -20,8 +20,9 @@ Web 与 CLI 是同一能力的两张脸，能力一律服务端执行、可审�
 
 ## v0.3 —— 走出去
 
-GitHub 公开 + PyPI 0.1.0（等仓库/凭据）· 多远端 profile 切换 ·
-桌面壳评估（tauri/pywebview）· 英文文档补全。
+GitHub 公开 + PyPI 0.1.0（等仓库/凭据，其余不动手）。已完成：
+✅ 多远端 profile（23c0272）· ✅ 回归测试套（6d884f0）· ✅ README 对齐（dcaaa25）·
+✅ 桌面壳评估→结论落地 `web --open/--app`（[结论](desktop-shell.md)）。
 
 ## 原则
 

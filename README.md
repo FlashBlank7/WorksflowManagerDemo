@@ -41,7 +41,7 @@ pipx install guanjia       # 或者
 guanjia            # 对话管家 REPL（招牌）
 guanjia --login    # 终端登录/注册（注册 = 团队注册令牌 + 自定用户名密码）
 guanjia today      # 不进 REPL，一眼统筹总览
-guanjia web        # 本地网页壳 http://127.0.0.1:7800
+guanjia web        # 本地网页壳 http://127.0.0.1:7800（--app 独立窗口 · --open 开浏览器）
 guanjia remote     # 多远端档案：list / use <名> / add <名> [服务器] / rm <名>
 ```
 
