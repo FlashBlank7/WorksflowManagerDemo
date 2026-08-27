@@ -102,8 +102,16 @@ def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
     run_id = workflow.start_run(remote, target["id"], inputs)
     print(f"▶ {target['name']} · run {run_id}（Ctrl+C 只停跟随，运行继续）")
     status = "running"
+    deltas = 0
     try:
         for row in workflow.follow_run(remote, run_id):
+            if row["type"].endswith(".delta"):  # 模型逐 token 事件：聚合成一行进度
+                deltas += 1
+                print(f"\r  …… 模型输出中（{deltas} 段）", end="", flush=True)
+                continue
+            if deltas:
+                print()
+                deltas = 0
             mark = "✕" if ("failed" in row["type"] or row["error"]) else "·"
             line = f"  {row['elapsed']:6.1f}s {mark} {row['type']:<20} {row['label']}"
             if row["error"]:
