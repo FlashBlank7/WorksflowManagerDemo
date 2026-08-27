@@ -7,7 +7,8 @@
     guanjia               # 读 ~/.bench.json（网页端登录过即有）
     guanjia --login       # 终端里登录/注册
 直接说话即可（"跑一下GPU日报"/"有哪些工作流"/"给我做一个……的工作流"）。
-命令：/today 统筹总览 · /wf 列表 · /login 重新登录 · /help · /quit
+命令：/today 统筹总览 · /wf 列表 · /remote 多远端 · /new · /login · /help · /quit
+Tab 补全：/ 命令、/remote 子命令与档案名、工作流名（/wf 之后）。
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ try:  # 方向键历史 + 跨会话持久（纯标准库，无 readline 的平�
     readline.set_history_length(500)
     atexit.register(lambda: readline.write_history_file(_HISTORY))
 except ImportError:
-    pass
+    readline = None  # type: ignore[assignment]
 import json
 import sys
 
@@ -39,6 +40,32 @@ from .config import list_profiles, load_config, save_login, use_profile
 from .remote import RemoteClient, RemoteError
 
 G = "\033[32m"; C = "\033[36m"; D = "\033[2m"; B = "\033[1m"; R = "\033[31m"; N = "\033[0m"
+
+
+_WF_CACHE: list[str] = []  # /wf 拉过一次即缓存，Tab 直接补工作流名
+_SLASH = ("/today", "/wf", "/remote", "/new", "/login", "/help", "/quit")
+
+
+def _completer(text: str, state: int):
+    buf = readline.get_line_buffer() if readline else ""
+    if buf.startswith("/remote "):
+        rest = buf[len("/remote "):]
+        if rest.startswith(("use ", "rm ")):
+            _, profiles = list_profiles()
+            cands = [name for name in profiles if name.startswith(text)]
+        else:
+            cands = [w for w in ("list", "use", "add", "rm") if w.startswith(text)]
+    elif buf.startswith("/"):
+        cands = [c for c in _SLASH if c.startswith(text)]
+    else:
+        cands = [w for w in _WF_CACHE if w and w.startswith(text)]
+    return cands[state] if state < len(cands) else None
+
+
+if readline:
+    readline.set_completer_delims(" ")
+    readline.set_completer(_completer)
+    readline.parse_and_bind("tab: complete")
 
 
 def say(text: str) -> None:
@@ -150,7 +177,7 @@ def main() -> None:
         if text == "/help":
             print(f"{D}直接用自然语言：跑一下GPU日报 / 有哪些工作流 / 昨天日报结果多少 /\n"
                   f"给我做一个「输入文本输出摘要」的工作流……\n"
-                  f"命令：/today 统筹总览 · /wf 工作流列表 · /remote 多远端切换 · /new 新对话 ·\n/login 重新登录 · /quit 退出{N}")
+                  f"命令：/today 统筹总览 · /wf 工作流列表 · /remote 多远端切换 · /new 新对话 ·\n/login 重新登录 · /quit 退出 · Tab 可补全命令/档案/工作流名{N}")
             continue
         if text == "/remote" or text.startswith("/remote "):
             parts = text.split()
@@ -211,6 +238,7 @@ def main() -> None:
                 from .plugins import workflow as wf
                 items = wf.list_workflows(remote)
                 published = [w for w in items if w["published"]]
+                _WF_CACHE[:] = [w["name"] for w in published]
                 for w in published:
                     print(f"  {G}▸{N} {w['name']} {D}v{w['version']}{N}")
                 say(f"{len(published)} 个已发布（共 {len(items)} 个）——想跑哪个直接说。")
