@@ -2,6 +2,19 @@
 
 版本还未对外发布（PyPI 发布时从这里截取）。日期为完成日。
 
+## 0.5.0 — 2026-08-29
+
+顺手到底：
+
+- **失败重跑**：Web 失败行「重跑」就地反馈；CLI `guanjia rerun <run前缀>`
+  （原输入透传，前缀在各应用近期运行里解析唯一命中）
+- **`guanjia run --follow`**：实时滚动事件到 terminal 收尾再补 outputs；
+  顺手修了 SSE 解析丢 `event:` 类型行的老 bug（`_event`/`_id`）
+- **工作流搬运**：`guanjia export <名> [-o 文件|-]` ↔ `guanjia import <文件>
+  [--name] [--no-publish]`，Web 详情「导出」/列表页「导入」同源；
+  平台放行 `replace_workflow`/`replace_tests` 整片替换（全图校验，活体验证过）
+- 工程：测试门加 pipefail（管道吞退出码教训）、桩测试增至 54 用例
+
 ## 0.4.0 — 2026-08-28
 
 看得清、追得到：
