@@ -63,6 +63,38 @@ def build_status(remote: RemoteClient, build_id: str) -> dict:
     }
 
 
+class InputTypeError(ValueError):
+    """输入值与声明类型不符——要让用户看见并改，不能静默丢键。"""
+
+
+def coerce_input(raw: str, declared_type: str | None) -> object:
+    """命令行拿到的永远是字符串，按工作流声明的类型转成真实值。
+
+    真机上 60 个声明输入里 32 个 type=array —— 不转换的话这些工作流从
+    `guanjia run` / cron 出口 100% 跑不通，报错还指向下游节点让人摸不着头脑。
+    网页壳 app.js 的 coerceInput() 是同一套规则，改这里记得同步改那边。
+    """
+    kind = str(declared_type or "string").lower()
+    if kind in ("array", "object", "any", "json"):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise InputTypeError(f"要填 {kind} 类型的 JSON：{error}") from error
+    if kind in ("number", "float"):
+        try:
+            return float(raw)
+        except ValueError as error:
+            raise InputTypeError("要填数字") from error
+    if kind in ("integer", "int"):
+        try:
+            return int(raw)
+        except ValueError as error:
+            raise InputTypeError("要填整数") from error
+    if kind in ("boolean", "bool"):
+        return raw.strip().lower() in ("true", "1", "yes", "y", "是", "on")
+    return raw
+
+
 def input_schema(remote: RemoteClient, app_id: str) -> list[dict]:
     draft = remote.request("GET", f"/api/v1/applications/{app_id}/draft")
     for node in draft["snapshot"]["workflow"]["nodes"]:

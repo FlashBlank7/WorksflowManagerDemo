@@ -1,7 +1,18 @@
 let S={messages:[],workflows:[],current:null,genBuild:null,onlyPub:true,user:null,sid:null,followTimer:null};
 const $=id=>document.getElementById(id);
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
-function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// 与 CLI 的 workflow.coerce_input 同一套规则；改一边记得同步另一边
+function coerceInput(raw,type){const k=String(type||'string').toLowerCase();
+  if(k==='array'||k==='object'||k==='any'||k==='json')return JSON.parse(raw);
+  if(k==='number'||k==='float'){const n=Number(raw);if(raw.trim()===''||Number.isNaN(n))throw new Error('要填数字');return n}
+  if(k==='integer'||k==='int'){const n=Number(raw);if(!Number.isInteger(n))throw new Error('要填整数');return n}
+  if(k==='boolean'||k==='bool')return ['true','1','yes','y','是','on'].includes(raw.trim().toLowerCase());
+  return raw}
+function needsTextarea(f){const k=String(f.type||'string').toLowerCase();
+  return k==='array'||k==='object'||k==='any'||k==='json'
+    ||(typeof f.example==='string'&&f.example.includes('\n'))}
 
 async function boot(){const d=await api('/api/bootstrap');
   if(!d.configured||!d.connected){
@@ -196,10 +207,15 @@ function renderList(){const q=($('wf-search').value||'').toLowerCase();
     </div>`).join('')||'<div class="empty">没有匹配的工作流</div>'}
 async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
   let schema=[];try{schema=await api('/api/workflow/inputs/'+id)}catch(e){}
-  const fields=schema.map(f=>{const isObj=typeof f.example==='object';
-    return `<div class="field"><label>${esc(f.label)}<code>${f.name} · ${f.type}</code></label>
-    ${isObj?`<textarea data-k="${f.name}" data-json="1">${esc(JSON.stringify(f.example,null,2))}</textarea>`
-          :`<input data-k="${f.name}" value="${esc(f.example)}">`}</div>`}).join('');
+  S.schema=schema;
+  // 只用 HTML 搭骨架，值一律事后用 DOM 赋——既躲开属性转义/注入，
+  // 也不会被 <input value> 把多行示例截成一行（招牌 demo 就栽在这：
+  // 三行文本被截成一行，业主拿到 line_count=1 还以为是对的）
+  const fields=schema.map(f=>`<div class="field">
+    <label>${esc(f.label)}<code>${esc(f.name)} · ${esc(f.type||'string')}</code></label>
+    ${needsTextarea(f)?`<textarea data-k="${esc(f.name)}"></textarea>`
+                      :`<input data-k="${esc(f.name)}">`}
+    <div class="field-err"></div></div>`).join('');
   $('wf-detail').innerHTML=`<div class="detail"><h3>${esc(S.current.name)}
     <span class="badge ${S.current.published?'b-on':'b-off'}">${S.current.published?'v'+S.current.version:'未发布'}</span></h3>
     <div class="meta">${esc(S.current.description)}</div>
@@ -210,6 +226,10 @@ async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
     <div id="run-result"></div>
     <div id="run-history"></div></div>`;
   loadHistory(id);
+  document.querySelectorAll('#run-form [data-k]').forEach(el=>{
+    const f=schema.find(x=>x.name===el.dataset.k);if(!f)return;
+    el.value=(f.example===undefined||f.example===null)?''
+      :(typeof f.example==='string'?f.example:JSON.stringify(f.example,null,2))});
   $('wf-detail').scrollIntoView({behavior:'smooth',block:'nearest'})}
 async function loadHistory(id){const box=$('run-history');if(!box)return;
   try{const runs=await api('/api/workflow/history/'+id);
@@ -269,9 +289,16 @@ async function exportWf(btn){btn.disabled=true;
     setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
   catch(e){alert('导出失败：'+e.message)}
   btn.disabled=false}
-async function runWf(btn){btn.disabled=true;const inputs={};
+async function runWf(btn){const inputs={};let bad=false;
   document.querySelectorAll('#run-form [data-k]').forEach(el=>{
-    try{inputs[el.dataset.k]=el.dataset.json?JSON.parse(el.value):el.value}catch(e){}});
+    const f=(S.schema||[]).find(x=>x.name===el.dataset.k)||{};
+    const box=el.parentElement.querySelector('.field-err');
+    try{inputs[el.dataset.k]=coerceInput(el.value,f.type);
+      if(box)box.textContent='';el.classList.remove('bad')}
+    catch(e){bad=true;el.classList.add('bad');   // 解析失败要看得见，不能静默丢键
+      if(box)box.textContent='格式不对：'+e.message}});
+  if(bad){$('run-result').innerHTML='<div class="result r-err">有输入格式不对，改好再跑</div>';return}
+  btn.disabled=true;
   const box=$('run-result');box.innerHTML='<div class="result r-ok">远端运行中…</div>';
   try{const r=await api('/api/workflow/run',{app_id:S.current.id,inputs});
     const rows=Object.entries(r.outputs||{}).map(([k,v])=>`<div class="kv"><b>${esc(k)}</b><span>${esc(typeof v==='object'?JSON.stringify(v,null,2):v)}</span></div>`).join('');

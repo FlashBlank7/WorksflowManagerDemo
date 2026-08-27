@@ -57,3 +57,36 @@ class ResultFieldsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InputCoercionTest(unittest.TestCase):
+    """命令行给的永远是字符串，按声明类型转成真实值。
+
+    真机 60 个声明输入里 32 个 type=array —— 不转换的话这些工作流从
+    `guanjia run` / cron 出口 100% 跑不通。
+    """
+
+    def test_array_and_object(self):
+        self.assertEqual(workflow.coerce_input('[{"a":1}]', "array"), [{"a": 1}])
+        self.assertEqual(workflow.coerce_input('{"k":"v"}', "object"), {"k": "v"})
+
+    def test_numbers_and_bool(self):
+        self.assertEqual(workflow.coerce_input("3.5", "number"), 3.5)
+        self.assertEqual(workflow.coerce_input("7", "integer"), 7)
+        self.assertIs(workflow.coerce_input("是", "boolean"), True)
+        self.assertIs(workflow.coerce_input("no", "boolean"), False)
+
+    def test_string_passthrough_and_unknown_type(self):
+        self.assertEqual(workflow.coerce_input("abc", "string"), "abc")
+        self.assertEqual(workflow.coerce_input("abc", None), "abc")
+        self.assertEqual(workflow.coerce_input("abc", "什么类型"), "abc")
+
+    def test_multiline_string_survives(self):
+        """招牌 demo 的三行文本必须原样传过去，不能被截断。"""
+        text = "第一行\n第二行\n第三行"
+        self.assertEqual(workflow.coerce_input(text, "string"), text)
+
+    def test_bad_values_raise_not_silently_drop(self):
+        for raw, kind in [("不是JSON", "array"), ("abc", "number"), ("3.5", "integer")]:
+            with self.assertRaises(workflow.InputTypeError):
+                workflow.coerce_input(raw, kind)

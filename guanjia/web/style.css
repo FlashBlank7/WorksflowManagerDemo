@@ -238,3 +238,8 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .hl-row.warn .hl-st{color:var(--warn)}
 .hl-nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
 .hl-rs{color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
+/* 输入格式错误：就地提示，别让提交静默丢键 */
+.field-err{color:var(--err);font-size:11.5px;min-height:0;margin-top:3px}
+.field input.bad,.field textarea.bad{border-color:var(--err)}
+.field textarea{min-height:76px;font-family:ui-monospace,monospace;font-size:12.5px}

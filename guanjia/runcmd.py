@@ -62,24 +62,41 @@ def main(argv: list[str]) -> int:
         print(f"「{target['name']}」还没有发布版本——在对话里让莉莉丝先完成构建。", file=sys.stderr)
         return 1
 
+    # 声明的类型表要**无条件**取：命令行给的永远是字符串，array/object 必须转，
+    # 否则声明了 array 的工作流从这个出口 100% 跑不通（真机 60 个输入里 32 个是 array）
+    schema: list[dict] = []
+    try:
+        schema = workflow.input_schema(remote, target["id"])
+    except RemoteError:
+        pass
+    types = {field["name"]: field.get("type") for field in schema}
+
     inputs: dict = {}
     for pair in args.pairs:
         if "=" not in pair:
             print(f"输入参数要写成 key=value，收到：{pair}", file=sys.stderr)
             return 2
         key, value = pair.split("=", 1)
-        inputs[key] = value
+        try:
+            inputs[key] = workflow.coerce_input(value, types.get(key))
+        except workflow.InputTypeError as error:
+            print(f"输入 {key} 不对：{error}", file=sys.stderr)
+            return 2
 
     if not args.json and sys.stdin.isatty():  # 交互场景补齐缺失输入
-        try:
-            for field in workflow.input_schema(remote, target["id"]):
-                if field["name"] not in inputs:
-                    hint = f"（如 {field['example']}）" if field.get("example") else ""
-                    value = input(f"  {field['label']}{hint}: ").strip()
-                    if value:
-                        inputs[field["name"]] = value
-        except RemoteError:
-            pass  # 拿不到输入表就按已给参数直跑
+        for field in schema:
+            if field["name"] in inputs:
+                continue
+            example = field.get("example")
+            hint = f"（如 {json.dumps(example, ensure_ascii=False)[:60]}）" if example else ""
+            value = input(f"  {field['label']} [{field.get('type') or 'string'}]{hint}: ").strip()
+            if not value:
+                continue
+            try:
+                inputs[field["name"]] = workflow.coerce_input(value, field.get("type"))
+            except workflow.InputTypeError as error:
+                print(f"输入 {field['name']} 不对：{error}", file=sys.stderr)
+                return 2
 
     if args.follow:
         return _follow(remote, target, inputs)
