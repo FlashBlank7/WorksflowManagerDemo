@@ -425,7 +425,8 @@ async function loadOverview(){try{const d=await api('/api/overview');
     <span class="right">${s.last_fire_date?'最近触发 '+esc(s.last_fire_date):'尚未触发'}</span></div>`).join('')
     ||'<div class="line-item sub2">还没有定时任务——在生成需求里写"每天X点自动运行"即可</div>';
   $('ov-failures').innerHTML=d.recent_failures.map(f=>`<div class="line-item"><b>${esc(f.workflow)}</b>
-    <span class="sub2">${esc(f.error||'').slice(0,60)}</span><span class="right">${esc(f.at)}</span></div>`).join('')
+    <span class="sub2">${esc(f.error||'').slice(0,60)}</span>
+    <span class="right">run ${esc(f.run_id)} · ${esc(f.at)}</span></div>`).join('')
     ||'<div class="line-item sub2">近期没有失败 🎉</div>'}
   catch(e){$('ov-stats').innerHTML='<div class="stat bad"><div class="num">!</div><div class="lbl">'+esc(e.message)+'</div></div>'}}
 

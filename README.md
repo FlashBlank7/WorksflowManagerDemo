@@ -74,4 +74,4 @@ uv tool install --from ~/code/bench guanjia   # 源码安装
 python3 -m guanjia                            # 或直接跑
 ```
 
-MIT License.
+MIT License. · [和近邻的详细对比](docs/alternatives.md)
