@@ -165,3 +165,17 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .bd .md-t th,.bd .md-t td{border:1px solid var(--line);padding:4px 10px;text-align:left}
 .bd .md-t th{background:rgba(20,26,34,.04)}
 .msg.bot .bd{white-space:normal}
+
+/* 窄屏（切片6）：侧栏变顶栏 */
+@media (max-width:720px){
+  #shell.show{flex-direction:column}
+  aside{width:100%;flex-direction:row;align-items:center;padding:8px 12px;gap:4px;
+    border-right:0;border-bottom:1px solid var(--line)}
+  aside .logo{padding:0 6px 0 0}
+  .nav-btn{width:auto;padding:8px 10px;margin:0}
+  aside .spacer{flex:1}
+  .user-chip{padding:5px 8px}.user-chip .who small{display:none}
+  .conn-note{display:none}
+  .chat-scroll{padding:16px 10px}.composer{padding:10px 12px}
+  #view-wf,.view-page{padding:14px 12px}
+}

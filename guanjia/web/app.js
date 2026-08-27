@@ -6,6 +6,7 @@ function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}
 async function boot(){const d=await api('/api/bootstrap');
   if(!d.configured||!d.connected){
     $('login').classList.add('show');$('shell').classList.remove('show');
+    setTimeout(()=>{($('lg-server').value?$('lg-name'):$('lg-server')).focus()},50);
     if(d.server)$('lg-server').value=d.server;
     if(d.configured&&!d.connected)$('lg-err').textContent='连不上远端：'+(d.detail||'');
     return}
@@ -14,7 +15,7 @@ async function boot(){const d=await api('/api/bootstrap');
   $('u-name').textContent=d.user.name;$('u-role').textContent=d.user.role==='admin'?'管理员':'成员';
   $('u-dot').textContent=(d.user.name||'?').slice(0,1);
   $('conn-note').textContent='已连接 '+d.server;
-  renderList()}
+  renderList();setTimeout(()=>{const el=$('chat-input');el&&el.focus()},50)}
 let REG=false;
 function toggleMode(){REG=!REG;$('lg-reg-row').style.display=REG?'block':'none';
   $('lg-go').textContent=REG?'注册并登录':'登录';
@@ -49,7 +50,8 @@ async function loadOverview(){try{const d=await api('/api/overview');
     ||'<div class="line-item sub2">近期没有失败 🎉</div>'}
   catch(e){$('ov-stats').innerHTML='<div class="stat bad"><div class="num">!</div><div class="lbl">'+esc(e.message)+'</div></div>'}}
 
-function renderChat(waiting){$('chat-col').innerHTML=S.messages.map((m,i)=>{
+function nearBottom(){const el=$('chat-scroll');return el.scrollHeight-el.scrollTop-el.clientHeight<140}
+function renderChat(waiting){const stick=nearBottom();$('chat-col').innerHTML=S.messages.map((m,i)=>{
     if(m.kind==='action')return `<div style="margin:-8px 0 12px 42px;font:11.5px/1.5 ui-monospace,monospace;color:var(--faint)">⚙ ${esc(m.text)}</div>`;
     if(m.kind==='build')return `<div style="margin:0 0 14px 42px;border-left:3px solid var(--accent-line);padding:6px 12px;font:12px/1.7 ui-monospace,monospace;color:var(--sub);white-space:pre-wrap">${esc(m.text)}</div>`;
     if(m.kind==='answerbox')return `<div style="margin:0 0 14px 42px;display:flex;gap:8px;max-width:520px">
@@ -61,7 +63,7 @@ function renderChat(waiting){$('chat-col').innerHTML=S.messages.map((m,i)=>{
     return `<div class="msg ${m.role==='user'?'user':'bot'}">
     <div class="av">${m.role==='user'?'我':'远'}</div>
     <div class="bd${last?' wait':''}">${body}${last?'<i>…</i>':''}</div></div>`}).join('');
-  $('chat-scroll').scrollTop=$('chat-scroll').scrollHeight}
+  if(stick)$('chat-scroll').scrollTop=$('chat-scroll').scrollHeight}
 
 /* ── 迷你 markdown（切片5）：先转义后变换，支持表格/代码块/列表/加粗/行内码 ── */
 function md(t){
@@ -91,7 +93,8 @@ function inl(t){return t
   .replace(/`([^`]+)`/g,'<code class="md-c">$1</code>')}
 
 function pushMsg(role,text,wait){S.messages.push({role,text});renderChat(wait)}
-async function send(){const t=$('chat-input').value.trim();if(!t)return;$('chat-input').value='';
+async function send(){const t=$('chat-input').value.trim();if(!t||S.sending)return;
+  S.sending=true;$('send-btn').disabled=true;$('chat-input').value='';
   pushMsg('user',t);
   const historyForSend=S.messages.filter(m=>!m.kind&&m.text);
   pushMsg('assistant','',true);
@@ -124,7 +127,8 @@ async function send(){const t=$('chat-input').value.trim();if(!t)return;$('chat-
   catch(e){
     try{const r=await api('/api/chat',{messages:historyForSend});
       cur().text=r.text||'(空回复)';renderChat(false)}
-    catch(e2){cur().text='远端出错：'+e2.message;renderChat(false)}}}
+    catch(e2){cur().text='远端出错：'+e2.message;renderChat(false)}}
+  S.sending=false;$('send-btn').disabled=false;const ci=$('chat-input');ci&&ci.focus()}
 
 function togglePub(){S.onlyPub=!S.onlyPub;$('wf-pub').classList.toggle('on',S.onlyPub);renderList()}
 function renderList(){const q=($('wf-search').value||'').toLowerCase();
