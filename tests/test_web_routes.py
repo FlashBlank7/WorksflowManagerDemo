@@ -30,6 +30,15 @@ class StubRemote(BaseHTTPRequestHandler):
 
     fail_paths: set = set()          # 这些路径返回 404，用来测老远端降级
     seen: list = []
+    stream_broken: bool = False      # 让流式端点直接 500，测本地壳的错误呈现
+    stream_chunks: list = [
+        'event: delta\ndata: {"type":"delta","text":"正在"}\n\n',
+        ': keep-alive\n\n',
+        'event: delta\ndata: {"type":"delta","text":"查询…"}\n\n',
+        'event: action\ndata: {"type":"action","tool":"list_workflows",'
+        '"summary":"1 个工作流"}\n\n',
+        'event: final\ndata: {"type":"final","text":"共 1 个工作流。"}\n\n',
+    ]
 
     def log_message(self, *args):
         pass
@@ -122,6 +131,16 @@ class StubRemote(BaseHTTPRequestHandler):
             return self._json(200, {"status": "queued"})
         if self.path == "/api/v1/assistant/agent":
             return self._json(200, {"text": "好的", "actions": []})
+        if self.path == "/api/v1/assistant/agent/stream":
+            if StubRemote.stream_broken:
+                return self._json(500, {"detail": "上游炸了"})
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            for chunk in StubRemote.stream_chunks:
+                self.wfile.write(chunk.encode("utf-8"))
+                self.wfile.flush()
+            return
         self._json(404, {"detail": self.path})
 
 
@@ -297,6 +316,66 @@ class WebRoutesTest(unittest.TestCase):
         self.assertEqual([item["id"] for item in listed], ["s1"])
         status, one = self.json_get("/api/sessions/s1")
         self.assertEqual(len(one["messages"]), 1)      # answerbox 不落盘
+
+    # ── 对话流式：招牌路径 ──
+    def _stream(self, messages):
+        """像浏览器那样逐事件读回来。"""
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/chat/stream", method="POST",
+            data=json.dumps({"messages": messages}).encode("utf-8"),
+            headers={"Content-Type": "application/json"})
+        events = []
+        with urllib.request.urlopen(request, timeout=30) as response:
+            self.assertEqual(response.headers.get("Content-Type"), "text/event-stream")
+            for raw in response:
+                line = raw.decode("utf-8").strip()
+                if line.startswith("data: "):
+                    events.append(json.loads(line[6:]))
+        return events
+
+    def test_chat_stream_passes_events_through(self):
+        events = self._stream([{"role": "user", "text": "有哪些工作流"}])
+        self.assertEqual([e["type"] for e in events],
+                         ["delta", "delta", "action", "final"])
+        self.assertEqual("".join(e["text"] for e in events if e["type"] == "delta"),
+                         "正在查询…")
+        self.assertEqual(events[2]["tool"], "list_workflows")
+        self.assertEqual(events[3]["text"], "共 1 个工作流。")
+
+    def test_chat_stream_reports_upstream_error_inside_the_stream(self):
+        """上游炸了也要走流内呈现——不能让浏览器那头卡住或拿到半截 HTTP 错误。"""
+        StubRemote.stream_broken = True
+        try:
+            events = self._stream([{"role": "user", "text": "随便"}])
+        finally:
+            StubRemote.stream_broken = False
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["type"], "error")
+        self.assertIn("500", events[0]["text"])
+
+    def test_chat_stream_survives_keepalive_and_unicode(self):
+        """keep-alive 注释行要被跳过；中文不能被转义成 \\uXXXX 丢给前端。"""
+        original = StubRemote.stream_chunks
+        StubRemote.stream_chunks = [
+            ': keep-alive\n\n',
+            'event: final\ndata: {"type":"final","text":"门店合计：甲店 1200 元"}\n\n',
+        ]
+        try:
+            events = self._stream([{"role": "user", "text": "对账"}])
+        finally:
+            StubRemote.stream_chunks = original
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["text"], "门店合计：甲店 1200 元")
+
+    def test_chat_fallback_uses_agent_endpoint(self):
+        """流式失败时的回退也要走带工具的智能体端点（此前打的是无工具的旧端点）。"""
+        before = len(StubRemote.seen)
+        status, data = self.post("/api/chat", {"messages": [{"role": "user", "text": "hi"}]})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["text"], "好的")
+        called = [path for method, path in StubRemote.seen[before:] if method == "POST"]
+        self.assertIn("/api/v1/assistant/agent", called)
+        self.assertNotIn("/api/v1/assistant/chat", called)
 
     # ── 未知路由 ──
     def test_unknown_route_is_404(self):
