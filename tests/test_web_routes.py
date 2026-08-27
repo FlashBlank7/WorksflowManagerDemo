@@ -386,3 +386,104 @@ class WebRoutesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AccessKeyTest(unittest.TestCase):
+    """非回环绑定时的访问密钥。
+
+    网页壳本身没有登录——绑到 0.0.0.0 等于把平台账号给同网段所有人。
+    所以非回环绑定强制要一把随机钥匙；回环仍然零摩擦。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.old_home = os.environ.get("HOME")
+        os.environ["HOME"] = cls.tmp.name
+        cls.old_key = shell.Handler.access_key
+        shell.Handler.access_key = "secret-key-123"
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), shell.Handler)
+        cls.port = cls.server.server_address[1]
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        shell.Handler.access_key = cls.old_key
+        if cls.old_home is not None:
+            os.environ["HOME"] = cls.old_home
+        cls.tmp.cleanup()
+
+    def _raw(self, path, headers=None):
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}{path}", headers=headers or {})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return response.status, response.read(), response.headers
+        except urllib.error.HTTPError as error:
+            return error.code, error.read(), error.headers
+
+    def test_no_key_is_rejected(self):
+        status, body, _ = self._raw("/")
+        self.assertEqual(status, 401)
+        self.assertIn("访问密钥".encode("utf-8"), body)
+
+    def test_wrong_key_is_rejected(self):
+        status, _, _ = self._raw("/?k=wrong-guess")
+        self.assertEqual(status, 401)
+
+    def test_api_routes_are_protected_too(self):
+        """不能只挡首页——API 才是能动账号的地方。"""
+        status, _, _ = self._raw("/api/bootstrap")
+        self.assertEqual(status, 401)
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/chat", method="POST",
+            data=b"{}", headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                status = response.status
+        except urllib.error.HTTPError as error:
+            status = error.code
+        self.assertEqual(status, 401)
+
+    def test_right_key_opens_index_and_sets_cookie(self):
+        status, body, headers = self._raw("/?k=secret-key-123")
+        self.assertEqual(status, 200)
+        self.assertIn(b"lg-prof", body)                 # 首页真的出来了
+        self.assertIn("guanjia_key=secret-key-123", headers.get("Set-Cookie", ""))
+
+    def test_cookie_works_for_later_requests(self):
+        status, body, _ = self._raw(
+            "/static/app.js", headers={"Cookie": "guanjia_key=secret-key-123"})
+        self.assertEqual(status, 200)
+        self.assertIn(b"loadHealth", body)
+
+    def test_loopback_default_has_no_key(self):
+        """默认（回环）不该有任何摩擦。"""
+        self.assertEqual(shell.Handler.__dict__.get("access_key", ""), "secret-key-123")
+        # 类属性被本用例改过；默认值应为空串
+        import inspect
+        source = inspect.getsource(shell.Handler)
+        self.assertIn('access_key: str = ""', source)
+
+
+class RemoteHintTest(unittest.TestCase):
+    """远程机器上要告诉人家怎么连——用户真被这个坑过。"""
+
+    def test_hint_only_on_ssh(self):
+        old = {k: os.environ.get(k) for k in ("SSH_CONNECTION", "SSH_TTY")}
+        try:
+            for key in old:
+                os.environ.pop(key, None)
+            self.assertEqual(shell._remote_hint(7800), [])
+            os.environ["SSH_CONNECTION"] = "1.2.3.4 5 6.7.8.9 22"
+            lines = shell._remote_hint(7800)
+            self.assertTrue(any("ssh -L 7800:127.0.0.1:7800" in line for line in lines))
+            self.assertTrue(any("Add Port" in line for line in lines))
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value

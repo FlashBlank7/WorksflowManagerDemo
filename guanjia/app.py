@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +33,10 @@ def _profiles_meta() -> dict:
 
 class Handler(BaseHTTPRequestHandler):
     remote: RemoteClient | None = None
+    # 网页壳本身不做登录：它假设"能连到这个端口的人就是你"。
+    # 绑到回环之外时这个假设不成立——同网段任何人都能用你的平台账号，
+    # 所以非回环绑定强制要一把随机钥匙（回环仍然零摩擦）。
+    access_key: str = ""
 
     def log_message(self, *args) -> None:
         pass
@@ -83,10 +88,51 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self._maybe_set_cookie()   # 带 ?k= 打开首页后记住，后续请求不用再带
         self.end_headers()
         self.wfile.write(body)
 
+    def _key_ok(self) -> bool:
+        """非回环绑定时校验访问密钥：URL 上带 ?k=，之后靠 Cookie 记住。"""
+        if not Handler.access_key:
+            return True
+        from http.cookies import SimpleCookie
+        from urllib.parse import parse_qs, urlparse
+
+        given = parse_qs(urlparse(self.path).query).get("k", [""])[0]
+        # 记下"这次是从 URL 带钥匙来的"——路由稍后会把查询串剥掉，
+        # 种 Cookie 时就看不到它了
+        self._key_from_url = bool(given)
+        if not given:
+            raw = self.headers.get("Cookie") or ""
+            try:
+                given = SimpleCookie(raw).get("guanjia_key")
+                given = given.value if given else ""
+            except Exception:  # noqa: BLE001 - 坏 Cookie 当没有
+                given = ""
+        import hmac
+
+        return hmac.compare_digest(given, Handler.access_key)
+
+    def _deny(self) -> None:
+        body = ("访问密钥不对。启动 guanjia web 的那台机器上，"
+                "终端里印着带 ?k=... 的完整地址，用那个打开。").encode("utf-8")
+        self.send_response(401)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _maybe_set_cookie(self) -> None:
+        if Handler.access_key and getattr(self, "_key_from_url", False):
+            self.send_header("Set-Cookie",
+                             f"guanjia_key={Handler.access_key}; Path=/; SameSite=Strict")
+
     def do_GET(self) -> None:
+        if not self._key_ok():
+            return self._deny()
+        # 路由只看路径：带访问密钥时地址是 /?k=xxx，不去掉查询串就匹配不上首页
+        self.path = self.path.split("?")[0] or "/"
         try:
             if self.path == "/":
                 self._asset("index.html", "text/html; charset=utf-8")
@@ -156,6 +202,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": str(error)}, 500)
 
     def do_POST(self) -> None:
+        if not self._key_ok():
+            return self._deny()
         try:
             body = self._body()
             if self.path == "/api/config":
@@ -242,6 +290,25 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": str(error)}, 500)
 
 
+def _remote_hint(port: int) -> list[str]:
+    """在远程机器上跑时，印出本机该敲的转发命令。
+
+    真实摩擦：用户 SSH 到服务器跑 guanjia web，它只印一个 127.0.0.1 的地址，
+    然后在自己电脑上怎么也打不开——而答案（端口转发）它一个字没提。
+    """
+    import socket
+
+    if not os.getenv("SSH_CONNECTION") and not os.getenv("SSH_TTY"):
+        return []
+    host = socket.gethostname() or "服务器"
+    return [
+        f"  {'─' * 56}",
+        "  看起来你在远程机器上。在自己电脑的终端里跑这句，再打开上面的地址：",
+        f"    ssh -L {port}:127.0.0.1:{port} {host}",
+        "  （VSCode 用户：端口面板 Add Port 填 " f"{port}" " 也行）",
+    ]
+
+
 def _launch(url: str, app_mode: bool) -> None:
     """零依赖桌面壳：chromium 系 --app 独立窗口，找不到退回默认浏览器。"""
     if app_mode:
@@ -269,17 +336,35 @@ def main() -> None:
     parser.add_argument("--server", default=None)
     parser.add_argument("--token", default=None)
     parser.add_argument("--port", type=int, default=7800)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="绑定地址。默认只有本机能连；填 0.0.0.0 可让局域网访问，"
+                             "但会自动要求访问密钥（网页壳本身没有登录）")
     parser.add_argument("--open", action="store_true", help="启动后用默认浏览器打开")
     parser.add_argument("--app", action="store_true", help="启动后以独立窗口打开（chromium 系）")
     args = parser.parse_args()
     cfg = load_config(args.server, args.token)
     if cfg["token"]:
         Handler.remote = RemoteClient(cfg["server"], cfg["token"])
-    url = f"http://127.0.0.1:{args.port}"
+    host = args.host.strip() or "127.0.0.1"
+    loopback = host in ("127.0.0.1", "localhost", "::1")
+    if not loopback:
+        import secrets
+
+        Handler.access_key = secrets.token_urlsafe(12)
+    shown_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    url = f"http://{shown_host}:{args.port}"
+    if Handler.access_key:
+        url += f"/?k={Handler.access_key}"
+
     if args.open or args.app:
         threading.Timer(0.6, _launch, args=(url, args.app)).start()
     print(f"guanjia: {url}")
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    if not loopback:
+        print("  ⚠ 已对外开放：网页壳没有登录，凭这个地址就能用你的平台账号。")
+        print("    密钥只在这次启动有效；换成 SSH 端口转发更稳妥。")
+    for line in _remote_hint(args.port):
+        print(line)
+    ThreadingHTTPServer((host, args.port), Handler).serve_forever()
 
 
 
