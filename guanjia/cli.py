@@ -147,18 +147,44 @@ def main() -> None:
                 print(f"{R}{error}{N}")
             continue
         history.append({"role": "user", "text": text})
-        print(f"{D}…{N}", end="\r", flush=True)
+        actions, final, streamed = [], "", False
         try:
-            data = remote.request("POST", "/api/v1/assistant/agent", {"messages": history[-12:]})
-        except RemoteError as error:
-            print(f"{R}远端出错：{error}{N}")
-            history.pop()
-            continue
-        for action in data["actions"]:
-            print(f"  {D}⚙ {action['tool']} → {action['summary']}{N}")
-        say(data["text"])
-        history.append({"role": "assistant", "text": data["text"]})
-        for action in data["actions"]:
+            in_text = False
+            for event in remote.stream("/api/v1/assistant/agent/stream", {"messages": history[-12:]}):
+                kind = event.get("type")
+                if kind == "delta" and event.get("text"):
+                    if not in_text:
+                        print(f"{G}●{N} ", end="", flush=True)
+                        in_text = True
+                    print(event["text"], end="", flush=True)
+                    streamed = True
+                elif kind == "action":
+                    if in_text:
+                        print()
+                        in_text = False
+                    actions.append(event)
+                    print(f"  {D}⚙ {event.get('tool')} → {event.get('summary')}{N}")
+                elif kind == "final":
+                    final = event.get("text", "")
+                    if in_text:
+                        print()
+                        in_text = False
+                elif kind == "error":
+                    raise RemoteError(500, event.get("text", ""))
+        except RemoteError:
+            try:  # 老服务端回退：非流式
+                data = remote.request("POST", "/api/v1/assistant/agent", {"messages": history[-12:]})
+                actions, final = data["actions"], data["text"]
+                for action in actions:
+                    print(f"  {D}⚙ {action['tool']} → {action['summary']}{N}")
+            except RemoteError as error:
+                print(f"{R}远端出错：{error}{N}")
+                history.pop()
+                continue
+        if final and not streamed:
+            say(final)
+        history.append({"role": "assistant", "text": final})
+        for action in actions:
             if action.get("tool") == "generate_workflow" and action.get("build_id"):
                 follow_build(remote, action["build_id"])
                 break

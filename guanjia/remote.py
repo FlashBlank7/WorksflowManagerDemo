@@ -36,5 +36,24 @@ class RemoteClient:
         except urllib.error.HTTPError as error:
             raise RemoteError(error.code, error.read().decode("utf-8", errors="replace")) from error
 
+    def stream(self, path: str, body: dict):
+        """SSE 流：逐事件产出 dict。远端不支持时抛 RemoteError 由调用方回退。"""
+
+        request = urllib.request.Request(
+            f"{self.server}{path}", method="POST",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token}",
+                     "Content-Type": "application/json", "Accept": "text/event-stream"},
+        )
+        try:
+            response = urllib.request.urlopen(request, timeout=self.timeout)
+        except urllib.error.HTTPError as error:
+            raise RemoteError(error.code, error.read().decode("utf-8", errors="replace")) from error
+        with response:
+            for raw in response:
+                line = raw.decode("utf-8", errors="replace").strip()
+                if line.startswith("data: "):
+                    yield json.loads(line[6:])
+
     def health(self) -> dict:
         return self.request("GET", "/health")
