@@ -261,7 +261,8 @@ async function loadHistory(id){const box=$('run-history');if(!box)return;
       return '<div class="h-item"><div class="h-row '+st+'" onclick="toggleEvents(\''+r.id+'\',this)">'+
         '<span class="h-st">'+mk+'</span>'+
         '<span class="h-at">'+esc(r.at)+'</span>'+
-        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span>'+rb+'</div>'+
+        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span>'+
+        '<span class="h-by">'+esc(r.by||'⏰ 定时')+'</span>'+rb+'</div>'+
         '<div class="h-ev" id="ev-'+r.id+'"></div></div>'}).join('')}
   catch(e){box.innerHTML=''}}
 async function rerunRun(id,btn,ev){ev.stopPropagation();btn.disabled=true;btn.textContent='重跑中…';

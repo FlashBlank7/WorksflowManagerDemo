@@ -142,7 +142,8 @@ def run(remote: RemoteClient, app_id: str, inputs: dict, wait_seconds: float = 4
         current = remote.request("GET", f"/api/v1/runs/{run_id}")
         if current["status"] in TERMINAL_STATUSES:
             result = {"run_id": run_id, "status": current["status"],
-                      "outputs": _result_outputs(current), "error": _result_error(current)}
+                      "outputs": _result_outputs(current), "error": _result_error(current),
+                      "by": str(current.get("triggered_by") or "")}
             if current["status"] == "paused":
                 result["waiting_node_id"] = (current.get("state") or {}).get("waiting_node_id")
             return result
@@ -164,6 +165,8 @@ def run_history(remote: RemoteClient, app_id: str, limit: int = 10) -> list[dict
         items.append({
             "id": r.get("id"),
             "status": r.get("status"),
+            # 谁触发的：空串是定时/系统触发或老数据
+            "by": str(r.get("triggered_by") or ""),
             "at": str(r.get("created_at") or "")[:19].replace("T", " "),
             "error": _result_error(r)[:120],
             "brief": brief,
