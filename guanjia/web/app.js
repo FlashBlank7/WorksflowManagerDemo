@@ -57,10 +57,39 @@ function renderChat(waiting){$('chat-col').innerHTML=S.messages.map((m,i)=>{
         onkeydown="if(event.key==='Enter')sendAnswer('${m.build_id}')">
       <button class="primary" onclick="sendAnswer('${m.build_id}')">转交</button></div>`;
     const last=waiting&&i===S.messages.length-1;
+    const body=m.role==='user'?esc(m.text):md(m.text);
     return `<div class="msg ${m.role==='user'?'user':'bot'}">
     <div class="av">${m.role==='user'?'我':'远'}</div>
-    <div class="bd${last?' wait':''}">${esc(m.text)}${last?'<i>…</i>':''}</div></div>`}).join('');
+    <div class="bd${last?' wait':''}">${body}${last?'<i>…</i>':''}</div></div>`}).join('');
   $('chat-scroll').scrollTop=$('chat-scroll').scrollHeight}
+
+/* ── 迷你 markdown（切片5）：先转义后变换，支持表格/代码块/列表/加粗/行内码 ── */
+function md(t){
+  t=esc(t);
+  t=t.replace(/```[a-z]*\n([\s\S]*?)```/g,(_,c)=>`<pre class="md-pre">${c}</pre>`);
+  const lines=t.split('\n');const out=[];let i=0;
+  while(i<lines.length){
+    const L=lines[i];
+    if(/^\|.*\|\s*$/.test(L)&&i+1<lines.length&&/^\|[\s:|-]+\|\s*$/.test(lines[i+1])){
+      const head=L.split('|').slice(1,-1).map(x=>x.trim());
+      i+=2;const rows=[];
+      while(i<lines.length&&/^\|.*\|\s*$/.test(lines[i])){
+        rows.push(lines[i].split('|').slice(1,-1).map(x=>x.trim()));i++}
+      out.push('<table class="md-t"><tr>'+head.map(h=>`<th>${inl(h)}</th>`).join('')+'</tr>'
+        +rows.map(r=>'<tr>'+r.map(c=>`<td>${inl(c)}</td>`).join('')+'</tr>').join('')+'</table>');
+      continue}
+    if(/^[-*] /.test(L)){
+      const items=[];
+      while(i<lines.length&&/^[-*] /.test(lines[i])){items.push(lines[i].slice(2));i++}
+      out.push('<ul class="md-ul">'+items.map(x=>`<li>${inl(x)}</li>`).join('')+'</ul>');
+      continue}
+    if(/^#{1,3} /.test(L)){out.push(`<div class="md-h">${inl(L.replace(/^#+ /,''))}</div>`);i++;continue}
+    out.push(L?`<p class="md-p">${inl(L)}</p>`:'');i++}
+  return out.join('')}
+function inl(t){return t
+  .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+  .replace(/`([^`]+)`/g,'<code class="md-c">$1</code>')}
+
 function pushMsg(role,text,wait){S.messages.push({role,text});renderChat(wait)}
 async function send(){const t=$('chat-input').value.trim();if(!t)return;$('chat-input').value='';
   pushMsg('user',t);
