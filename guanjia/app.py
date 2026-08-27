@@ -110,6 +110,21 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 Handler.remote = RemoteClient(server, token)
                 self._json({"ok": True, "user": result["user"]})
+            elif self.path == "/api/chat/stream":
+                remote = self._need_remote()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                try:
+                    for event in remote.stream("/api/v1/assistant/agent/stream",
+                                               {"messages": body.get("messages") or []}):
+                        self.wfile.write(f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode("utf-8"))
+                        self.wfile.flush()
+                except Exception as error:  # noqa: BLE001 - 错误走流内呈现
+                    payload = json.dumps({"type": "error", "text": str(error)[:200]}, ensure_ascii=False)
+                    self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                return
             elif self.path == "/api/chat":
                 self._json(assistant.chat(self._need_remote(), body.get("messages") or []))
             elif self.path == "/api/workflow/generate":

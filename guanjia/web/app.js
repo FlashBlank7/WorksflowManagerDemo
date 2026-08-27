@@ -49,16 +49,45 @@ async function loadOverview(){try{const d=await api('/api/overview');
     ||'<div class="line-item sub2">近期没有失败 🎉</div>'}
   catch(e){$('ov-stats').innerHTML='<div class="stat bad"><div class="num">!</div><div class="lbl">'+esc(e.message)+'</div></div>'}}
 
-function pushMsg(role,text,wait){S.messages.push({role,text});
-  $('chat-col').innerHTML=S.messages.map((m,i)=>`<div class="msg ${m.role==='user'?'user':'bot'}">
+function renderChat(waiting){$('chat-col').innerHTML=S.messages.map((m,i)=>{
+    if(m.kind==='action')return `<div style="margin:-8px 0 12px 42px;font:11.5px/1.5 ui-monospace,monospace;color:var(--faint)">⚙ ${esc(m.text)}</div>`;
+    const last=waiting&&i===S.messages.length-1;
+    return `<div class="msg ${m.role==='user'?'user':'bot'}">
     <div class="av">${m.role==='user'?'我':'远'}</div>
-    <div class="bd${wait&&i===S.messages.length-1?' wait':''}">${esc(m.text)}${wait&&i===S.messages.length-1?'<i>…</i>':''}</div></div>`).join('');
+    <div class="bd${last?' wait':''}">${esc(m.text)}${last?'<i>…</i>':''}</div></div>`}).join('');
   $('chat-scroll').scrollTop=$('chat-scroll').scrollHeight}
+function pushMsg(role,text,wait){S.messages.push({role,text});renderChat(wait)}
 async function send(){const t=$('chat-input').value.trim();if(!t)return;$('chat-input').value='';
-  pushMsg('user',t);pushMsg('assistant','',true);
-  try{const r=await api('/api/chat',{messages:S.messages.filter(m=>m.text)});
-    S.messages.pop();pushMsg('assistant',r.text||'(空回复)')}
-  catch(e){S.messages.pop();pushMsg('assistant','远端出错：'+e.message)}}
+  pushMsg('user',t);
+  const historyForSend=S.messages.filter(m=>!m.kind&&m.text);
+  pushMsg('assistant','',true);
+  const cur=()=>S.messages[S.messages.length-1];
+  try{
+    const resp=await fetch('/api/chat/stream',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:historyForSend})});
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const reader=resp.body.getReader();const dec=new TextDecoder();let buf='';let sawFinal=false;
+    for(;;){const {done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf('\n\n'))>=0){
+        const line=buf.slice(0,idx).trim();buf=buf.slice(idx+2);
+        if(!line.startsWith('data: '))continue;
+        const ev=JSON.parse(line.slice(6));
+        if(ev.type==='delta'&&ev.text){cur().text+=ev.text;renderChat(true)}
+        else if(ev.type==='action'){
+          const bubble=S.messages.pop();
+          S.messages.push({role:'assistant',kind:'action',text:`${ev.tool} → ${ev.summary||''}`});
+          S.messages.push(bubble);renderChat(true)}
+        else if(ev.type==='final'){cur().text=ev.text||cur().text||'(空回复)';sawFinal=true}
+        else if(ev.type==='error'){throw new Error(ev.text)}
+      }}
+    if(!cur().text&&!sawFinal)cur().text='(空回复)';
+    renderChat(false)}
+  catch(e){
+    try{const r=await api('/api/chat',{messages:historyForSend});
+      cur().text=r.text||'(空回复)';renderChat(false)}
+    catch(e2){cur().text='远端出错：'+e2.message;renderChat(false)}}}
 
 function togglePub(){S.onlyPub=!S.onlyPub;$('wf-pub').classList.toggle('on',S.onlyPub);renderList()}
 function renderList(){const q=($('wf-search').value||'').toLowerCase();
