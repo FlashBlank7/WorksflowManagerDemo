@@ -170,13 +170,28 @@ async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
 async function loadHistory(id){const box=$('run-history');if(!box)return;
   try{const runs=await api('/api/workflow/history/'+id);
     if(!runs.length){box.innerHTML='<div class="empty" style="padding:6px 0">还没跑过</div>';return}
-    box.innerHTML='<h4 class="h-title">最近运行</h4>'+runs.map(r=>{
+    box.innerHTML='<h4 class="h-title">最近运行（点行看过程）</h4>'+runs.map(r=>{
       const st=r.status==='succeeded'?'ok':(r.status==='failed'?'bad':'');
       const mk=r.status==='succeeded'?'✓':(r.status==='failed'?'✕':'…');
-      return '<div class="h-row '+st+'"><span class="h-st">'+mk+'</span>'+
+      return '<div class="h-item"><div class="h-row '+st+'" onclick="toggleEvents(\''+r.id+'\',this)">'+
+        '<span class="h-st">'+mk+'</span>'+
         '<span class="h-at">'+esc(r.at)+'</span>'+
-        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span></div>'}).join('')}
+        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span></div>'+
+        '<div class="h-ev" id="ev-'+r.id+'"></div></div>'}).join('')}
   catch(e){box.innerHTML=''}}
+async function toggleEvents(id,row){const box=$('ev-'+id);if(!box)return;
+  if(box.classList.contains('open')){box.classList.remove('open');return}
+  box.classList.add('open');
+  if(!box.dataset.loaded){box.innerHTML='<div class="ev-row"><span class="ev-tx">加载中…</span></div>';
+    try{const evs=await api('/api/workflow/runevents/'+id);box.dataset.loaded='1';
+      box.innerHTML=evs.length?evs.map(e=>{
+        const bad=/failed|error/.test(e.type)||/失败|error/i.test(e.extra||'');
+        return '<div class="ev-row'+(bad?' bad':'')+'">'+
+          '<span class="ev-at">'+esc(e.at)+'</span>'+
+          '<span class="ev-ty">'+esc(e.type)+'</span>'+
+          '<span class="ev-tx">'+esc(e.label)+(e.extra?' · '+esc(e.extra):'')+'</span></div>'}).join('')
+        :'<div class="ev-row"><span class="ev-tx">没有事件记录</span></div>'}
+    catch(e){box.innerHTML='<div class="ev-row bad"><span class="ev-tx">'+esc(e.message)+'</span></div>';delete box.dataset.loaded}}}
 async function runWf(btn){btn.disabled=true;const inputs={};
   document.querySelectorAll('#run-form [data-k]').forEach(el=>{
     try{inputs[el.dataset.k]=el.dataset.json?JSON.parse(el.value):el.value}catch(e){}});

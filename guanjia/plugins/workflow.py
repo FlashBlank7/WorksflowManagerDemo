@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import datetime
 
 from ..remote import RemoteClient
 
@@ -114,3 +115,34 @@ def run_history(remote: RemoteClient, app_id: str, limit: int = 10) -> list[dict
             "brief": brief,
         })
     return items
+
+
+def _map_events(payload: dict) -> list[dict]:
+    """事件 → 时间线行：时刻/类型/标题/附注（节点耗时、错误截断）。纯函数便于测试。"""
+    rows: list[dict] = []
+    started: dict[str, str] = {}
+    for event in payload.get("events", []):
+        data = event.get("data") or {}
+        at = str(event.get("at") or "")
+        etype = str(event.get("type") or "")
+        node = str(data.get("node_id") or "")
+        label = str(data.get("title") or node or etype)[:60]
+        extra = ""
+        if etype == "node.started" and node:
+            started[node] = at
+        if etype == "node.completed" and node in started:
+            try:
+                delta = (datetime.fromisoformat(at)
+                         - datetime.fromisoformat(started[node])).total_seconds()
+                extra = f"{delta:.1f}s"
+            except ValueError:
+                pass
+        error = data.get("error")
+        if error:
+            extra = (extra + " · " if extra else "") + str(error)[:160]
+        rows.append({"at": at[11:19], "type": etype, "label": label, "extra": extra})
+    return rows
+
+
+def run_events(remote: RemoteClient, run_id: str) -> list[dict]:
+    return _map_events(remote.request("GET", f"/api/v1/runs/{run_id}/events/list?limit=500"))
