@@ -164,11 +164,12 @@ def main() -> None:
             continue
         if text == "/wf":
             try:
-                data = remote.request("POST", "/api/v1/assistant/agent",
-                                      {"messages": [{"role": "user", "text": "列出已发布的工作流"}]})
-                for action in data["actions"]:
-                    print(f"  {D}⚙ {action['tool']} → {action['summary']}{N}")
-                say(data["text"])
+                from .plugins import workflow as wf
+                items = wf.list_workflows(remote)
+                published = [w for w in items if w["published"]]
+                for w in published:
+                    print(f"  {G}▸{N} {w['name']} {D}v{w['version']}{N}")
+                say(f"{len(published)} 个已发布（共 {len(items)} 个）——想跑哪个直接说。")
             except RemoteError as error:
                 print(f"{R}{error}{N}")
             continue

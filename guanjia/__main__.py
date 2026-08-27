@@ -13,6 +13,10 @@ import sys
 
 def main() -> None:
     args = sys.argv[1:]
+    if args and args[0] in ("--version", "-V"):
+        from . import __version__
+        print(f"guanjia {__version__}")
+        return
     if args and args[0] == "web":
         sys.argv = [sys.argv[0]] + args[1:]
         from .app import main as web_main
@@ -32,6 +36,10 @@ def main() -> None:
               f"已发布 {d['published_workflows']} · 生成中 {d['builds_active']}")
         for sch in d["schedules"]:
             print(f"  ⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}")
+        for f in d["recent_failures"][:5]:
+            print(f"  ✕ {f['workflow']} @{f['at']}  run {f['run_id']}  {f['error'][:60]}")
+        if d["recent_failures"]:
+            print("  （想知道为什么失败：guanjia 里问「run <编号> 为什么失败」）")
         return
     from .cli import main as cli_main
     cli_main()
