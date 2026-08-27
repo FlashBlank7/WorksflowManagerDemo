@@ -75,19 +75,45 @@ def input_schema(remote: RemoteClient, app_id: str) -> list[dict]:
     return []
 
 
+TERMINAL_STATUSES = ("succeeded", "failed", "paused", "cancelled")
+
+
+def _result_outputs(run: dict) -> dict:
+    """运行结果的权威来源是顶层 outputs；老远端没有时才退回 state 里逐节点拍平。
+
+    拍平是兜底路径：那里装的是每个节点的中间态，键会互相覆盖，
+    展示出来常常是「某个中间节点的 payload」而不是工作流声明的业务结果。
+    """
+    outputs = run.get("outputs")
+    if isinstance(outputs, dict) and outputs:
+        return outputs
+    flat: dict = {}
+    state = run.get("state") or {}
+    for node_id, value in (state.get("outputs") or {}).items():
+        if not isinstance(value, dict):
+            continue
+        for key, item in value.items():
+            flat[f"{node_id}.{key}" if key in flat else key] = item
+    return flat
+
+
+def _result_error(run: dict) -> str:
+    """错误权威来源是顶层 error；state 里没有 error 字段（平台模型压根没定义）。"""
+    return str(run.get("error") or (run.get("state") or {}).get("error") or "")
+
+
 def run(remote: RemoteClient, app_id: str, inputs: dict, wait_seconds: float = 45.0) -> dict:
     created = remote.request("POST", f"/api/v1/applications/{app_id}/runs", {"inputs": inputs})
     run_id = created["run_id"]
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
         current = remote.request("GET", f"/api/v1/runs/{run_id}")
-        if current["status"] in ("succeeded", "failed"):
-            outputs = {}
-            for value in (current["state"].get("outputs") or {}).values():
-                if isinstance(value, dict):
-                    outputs.update(value)
-            return {"run_id": run_id, "status": current["status"],
-                    "outputs": outputs, "error": current["state"].get("error")}
+        if current["status"] in TERMINAL_STATUSES:
+            result = {"run_id": run_id, "status": current["status"],
+                      "outputs": _result_outputs(current), "error": _result_error(current)}
+            if current["status"] == "paused":
+                result["waiting_node_id"] = (current.get("state") or {}).get("waiting_node_id")
+            return result
         time.sleep(1.5)
     return {"run_id": run_id, "status": "running", "outputs": {}, "error": None}
 
@@ -97,11 +123,7 @@ def run_history(remote: RemoteClient, app_id: str, limit: int = 10) -> list[dict
     runs = remote.request("GET", f"/api/v1/applications/{app_id}/runs?limit={int(limit)}")
     items = []
     for r in runs if isinstance(runs, list) else []:
-        state = r.get("state") or {}
-        outputs = {}
-        for value in (state.get("outputs") or {}).values():
-            if isinstance(value, dict):
-                outputs.update(value)
+        outputs = _result_outputs(r)
         brief = ""
         for key, value in outputs.items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
@@ -111,7 +133,7 @@ def run_history(remote: RemoteClient, app_id: str, limit: int = 10) -> list[dict
             "id": r.get("id"),
             "status": r.get("status"),
             "at": str(r.get("created_at") or "")[:19].replace("T", " "),
-            "error": str(state.get("error") or r.get("error") or "")[:120],
+            "error": _result_error(r)[:120],
             "brief": brief,
         })
     return items

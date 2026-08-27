@@ -188,6 +188,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .h-st{width:14px;text-align:center}
 .h-row.ok .h-st{color:var(--accent)}
 .h-row.bad .h-st{color:var(--err)}
+.h-row.warn .h-st{color:var(--warn)}
 .h-at{color:var(--sub);white-space:nowrap;font-variant-numeric:tabular-nums}
 .h-tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:var(--ink)}
 

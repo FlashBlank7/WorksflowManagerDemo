@@ -106,7 +106,7 @@ class FollowTest(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertIn("workflow.completed", text)
         self.assertIn("report = OK", text)
-        self.assertIn("✓ completed", text)
+        self.assertIn("✓ succeeded", text)  # 收尾以 run 的真实状态为准，不用事件词汇
 
 
 if __name__ == "__main__":

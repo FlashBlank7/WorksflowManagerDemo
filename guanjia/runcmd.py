@@ -2,7 +2,7 @@
 
     guanjia run GPU日报                    # 名字支持唯一子串匹配
     guanjia run 对账 month=2026-08 --json  # key=value 传输入，JSON 出结果
-退出码：0 成功 · 1 失败/未登录 · 2 参数或名字问题 · 3 超时仍在跑。
+退出码：0 成功 · 1 失败/取消/未登录 · 2 参数或名字问题 · 3 超时仍在跑 · 4 等待人工输入。
 """
 
 from __future__ import annotations
@@ -14,6 +14,10 @@ import sys
 from .config import load_config
 from .plugins import workflow
 from .remote import RemoteClient, RemoteError
+
+MARKS = {"succeeded": "✓", "failed": "✕", "cancelled": "⊘", "paused": "⏸",
+         "running": "…", "queued": "⋯"}
+EXIT_CODES = {"succeeded": 0, "failed": 1, "cancelled": 1, "paused": 4}
 
 
 def _resolve(items: list[dict], needle: str):
@@ -85,7 +89,7 @@ def main(argv: list[str]) -> int:
     if args.json:
         print(json.dumps({"workflow": target["name"], **result}, ensure_ascii=False))
     else:
-        mark = {"succeeded": "✓", "failed": "✕", "running": "…"}.get(result["status"], "?")
+        mark = MARKS.get(result["status"], "?")
         print(f"{mark} {target['name']} · run {result['run_id']} · {result['status']}")
         for key, value in (result["outputs"] or {}).items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
@@ -94,7 +98,10 @@ def main(argv: list[str]) -> int:
             print(f"  错误：{str(result['error'])[:300]}")
         if result["status"] == "running":
             print(f"  超过 --wait {args.wait:.0f}s 还在跑；稍后可在 REPL 问「run {result['run_id']} 结果如何」")
-    return {"succeeded": 0, "failed": 1}.get(result["status"], 3)
+        if result["status"] == "paused":
+            node = result.get("waiting_node_id") or "?"
+            print(f"  等人工输入（节点 {node}）：到网页壳里填表，或 guanjia 里回答莉莉丝的提问")
+    return EXIT_CODES.get(result["status"], 3)
 
 
 def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
@@ -124,22 +131,26 @@ def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
         return 3
     outputs: dict = {}
     error = ""
+    final: dict = {}
     try:
         final = remote.request("GET", f"/api/v1/runs/{run_id}")
-        for value in ((final.get("state") or {}).get("outputs") or {}).values():
-            if isinstance(value, dict):
-                outputs.update(value)
-        error = str((final.get("state") or {}).get("error") or "")
+        outputs = workflow._result_outputs(final)
+        error = workflow._result_error(final)
+        # 运行记录的 status 才是权威；事件推导出的 completed/failed 只是兜底词汇
+        status = str(final.get("status") or {"completed": "succeeded"}.get(status, status))
     except RemoteError:
-        pass
-    mark = {"completed": "✓", "failed": "✕"}.get(status, "…")
+        status = {"completed": "succeeded"}.get(status, status)
+    mark = MARKS.get(status, "…")
     print(f"{mark} {status}")
     for key, value in outputs.items():
         text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
         print(f"  {key} = {text[:500]}")
     if error:
         print(f"  错误：{error[:300]}")
-    return 0 if status == "completed" else (1 if status == "failed" else 3)
+    if status == "paused":
+        node = (final.get("state") or {}).get("waiting_node_id") or "?"
+        print(f"  等人工输入（节点 {node}）")
+    return EXIT_CODES.get(status, 3)
 
 
 def rerun_main(argv: list[str]) -> int:
@@ -170,7 +181,7 @@ def rerun_main(argv: list[str]) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        mark = {"succeeded": "✓", "failed": "✕", "running": "…"}.get(result["status"], "?")
+        mark = MARKS.get(result["status"], "?")
         label = f"{result.get('workflow') or '工作流'} · " if result.get("workflow") else ""
         print(f"{mark} {label}重跑 {run_id[:8]} → run {result['run_id']} · {result['status']}")
         for key, value in (result["outputs"] or {}).items():
@@ -178,7 +189,7 @@ def rerun_main(argv: list[str]) -> int:
             print(f"  {key} = {text[:500]}")
         if result.get("error"):
             print(f"  错误：{str(result['error'])[:300]}")
-    return {"succeeded": 0, "failed": 1}.get(result["status"], 3)
+    return EXIT_CODES.get(result["status"], 3)
 
 
 def export_main(argv: list[str]) -> int:

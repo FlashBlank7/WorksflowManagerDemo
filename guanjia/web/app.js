@@ -215,9 +215,10 @@ async function loadHistory(id){const box=$('run-history');if(!box)return;
   try{const runs=await api('/api/workflow/history/'+id);
     if(!runs.length){box.innerHTML='<div class="empty" style="padding:6px 0">还没跑过</div>';return}
     box.innerHTML='<h4 class="h-title">最近运行（点行看过程）</h4>'+runs.map(r=>{
-      const st=r.status==='succeeded'?'ok':(r.status==='failed'?'bad':'');
-      const mk=r.status==='succeeded'?'✓':(r.status==='failed'?'✕':'…');
-      const rb=r.status==='failed'?'<button class="h-rerun" onclick="rerunRun(\''+r.id+'\',this,event)">重跑</button>':'';
+      const M={succeeded:['ok','✓'],failed:['bad','✕'],cancelled:['warn','⊘'],
+        paused:['warn','⏸'],running:['','…'],queued:['','⋯']};
+      const [st,mk]=M[r.status]||['','?'];
+      const rb=(r.status==='failed'||r.status==='cancelled')?'<button class="h-rerun" onclick="rerunRun(\''+r.id+'\',this,event)">重跑</button>':'';
       return '<div class="h-item"><div class="h-row '+st+'" onclick="toggleEvents(\''+r.id+'\',this)">'+
         '<span class="h-st">'+mk+'</span>'+
         '<span class="h-at">'+esc(r.at)+'</span>'+

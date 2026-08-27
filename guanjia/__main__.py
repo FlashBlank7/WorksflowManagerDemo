@@ -61,19 +61,24 @@ def main() -> None:
             print(f"远端不可达或未登录：{error}\n先运行 guanjia --login")
             sys.exit(1)
         rt = d["runs_today"]
-        print(f"今日运行 {rt['total']}（✓{rt['succeeded']} ✕{rt['failed']}）· "
+        running = rt.get("running", 0)
+        print(f"今日运行 {rt['total']}（✓{rt['succeeded']} ✕{rt['failed']}"
+              + (f" ⋯{running}" if running else "") + "）· "
               f"已发布 {d['published_workflows']} · 生成中 {d['builds_active']}")
         week = d.get("week") or []
         if week:
             def _cell(day):
-                total = day["ok"] + day["fail"]
+                other = day.get("other", 0)
+                total = day["ok"] + day["fail"] + other
                 if not total:
                     return "·"
+                if not day["ok"] and not day["fail"]:
+                    return "○"          # 跑了但都没出结果（排队/进行中/暂停）
                 if day["fail"] > day["ok"]:
                     return "✕"
                 return "△" if day["fail"] else "✓"
             print("  近7日 " + " ".join(f"{w['date'][5:]}{_cell(w)}" for w in week)
-                  + "  （✓全成 △有失败 ✕失败居多 ·无运行）")
+                  + "  （✓全成 △有失败 ✕失败居多 ○未出结果 ·无运行）")
         for sch in d["schedules"]:
             print(f"  ⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}")
         for f in d["recent_failures"][:5]:
