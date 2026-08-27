@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .bench.json
+dist/
+.venv/
