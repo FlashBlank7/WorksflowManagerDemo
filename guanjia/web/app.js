@@ -225,6 +225,18 @@ async function toggleEvents(id,row){const box=$('ev-'+id);if(!box)return;
           '<span class="ev-tx">'+esc(e.label)+(e.extra?' · '+esc(e.extra):'')+'</span></div>'}).join('')
         :'<div class="ev-row"><span class="ev-tx">没有事件记录</span></div>'}
     catch(e){box.innerHTML='<div class="ev-row bad"><span class="ev-tx">'+esc(e.message)+'</span></div>';delete box.dataset.loaded}}}
+async function importWf(input){const file=input.files&&input.files[0];if(!file)return;
+  input.value='';
+  let payload;
+  try{payload=JSON.parse(await file.text())}
+  catch(e){alert('不是合法 JSON：'+e.message);return}
+  const name=prompt('导入后的名字（留空用快照里的）','')||'';
+  try{const r=await api('/api/workflow/import',{payload,name});
+    let msg='已导入「'+r.name+'」'+(r.published?'并发布':'（草稿，未发布）');
+    if(r.skipped_tests)msg+='\n测试无 mandatory 标记已跳过';
+    if(r.publish_error)msg+='\n发布被拒：'+r.publish_error+'\n草稿已留好，对话里可让莉莉丝补验收';
+    alert(msg);boot()}
+  catch(e){alert('导入失败：'+e.message)}}
 async function exportWf(btn){btn.disabled=true;
   try{const d=await api('/api/workflow/export/'+S.current.id);
     const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});

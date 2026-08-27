@@ -90,6 +90,9 @@
         <div class="tools">
           <input class="search" id="wf-search" placeholder="搜索…" oninput="renderList()">
           <button class="chip-toggle on" id="wf-pub" onclick="togglePub()">只看已发布</button>
+          <button class="chip-toggle" onclick="$('imp-file').click()">导入</button>
+          <input id="imp-file" type="file" accept=".json,.guanjia.json" style="display:none"
+            onchange="importWf(this)">
         </div></div>
       <div class="wf-grid" id="wf-list"></div>
       <div id="wf-detail"></div>

@@ -183,6 +183,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(workflow.run(self._need_remote(), body["app_id"], body.get("inputs") or {}))
             elif self.path == "/api/workflow/rerun":
                 self._json(workflow.rerun(self._need_remote(), str(body.get("run_id") or "")))
+            elif self.path == "/api/workflow/import":
+                self._json(workflow.import_snapshot(
+                    self._need_remote(), body.get("payload") or {},
+                    name=str(body.get("name") or "") or None,
+                    publish=bool(body.get("publish", True))))
             else:
                 self._json({"error": "not found"}, 404)
         except RemoteError as error:
