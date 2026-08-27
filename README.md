@@ -9,12 +9,17 @@
 
 甜蜜好用的工作流工具：**生成 + 统筹管理，CLI 对话管家是招牌特性**。持续开发。
 
-## 运行
+## 安装与运行
 
 ```bash
-python3 -m bench.app --server http://<平台地址>:8000 --token <API_TOKEN>
-# 打开 http://127.0.0.1:7800
+uv tool install bench-workbench   # 或 pipx install bench-workbench（发布后）
+bench                             # 对话管家 REPL（招牌）
+bench --login                     # 终端登录/注册
+bench today                       # 一眼统筹总览
+bench web                         # 本地网页壳 http://127.0.0.1:7800
 ```
+
+开发期从源码：`uv tool install --from ~/code/bench bench-workbench`。
 
 首次打开是登录页：**注册 = 共享注册令牌 + 自定用户名密码**（首个注册者自动成为
 管理员），登录后本地只存会话令牌（`~/.bench.json`），密码不落盘。
