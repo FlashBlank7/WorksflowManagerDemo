@@ -81,7 +81,14 @@ def run() -> int:
                       f"（坏 {counts.get('broken', 0)} · 停 {counts.get('stale', 0)}）")
                 for item in bad[:5]:
                     print(f"    · {item['workflow']}：{item['reason']}")
-                problems.append("上面这些工作流跑不通了——在对话里问「<名字> 为什么失败」看原因")
+                # 两种状态是两回事，别给同一条建议：
+                # broken 是跑起来出错，stale 是压根没跑（定时没开火）
+                if any(item.get("state") == "broken" for item in bad):
+                    problems.append("跑不通的那几个：在对话里说「<名字> 坏了帮我修」，"
+                                    "莉莉丝会在原工作流上改")
+                if any(item.get("state") == "stale" for item in bad):
+                    problems.append("没按时开火的那几个：先手动跑一次确认工作流本身没问题"
+                                    "（guanjia run <名字>），再看平台的调度器还在不在")
         except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
             pass  # 老版本远端没这个端点：体检跳过，不算问题
 

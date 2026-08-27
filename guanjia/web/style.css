@@ -243,3 +243,6 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .field-err{color:var(--err);font-size:11.5px;min-height:0;margin-top:3px}
 .field input.bad,.field textarea.bad{border-color:var(--err)}
 .field textarea{min-height:76px;font-family:ui-monospace,monospace;font-size:12.5px}
+
+.hl-tag{font-size:11px;padding:1px 7px;border-radius:9px;white-space:nowrap;
+  background:var(--bg);border:1px solid var(--warn);color:var(--warn)}

@@ -87,7 +87,8 @@ async function loadHealth(){const box=$('ov-health');if(!box)return;
         'onclick="gotoWf(\''+i.application_id+'\')" title="点开看这个工作流">'+
         '<span class="hl-st">'+(i.state==='broken'?'✕':'⏸')+'</span>'+
         '<span class="hl-nm">'+esc(i.workflow)+'</span>'+
-        '<span class="hl-rs">'+esc(i.reason)+'</span></div>').join('')+'</div>'}
+        '<span class="hl-rs">'+esc(i.reason)+'</span>'+
+        (i.overdue?'<span class="hl-tag">定时没开火</span>':'')+'</div>').join('')+'</div>'}
   catch(e){box.innerHTML=''}}
 async function loadOverview(){loadHealth();try{const d=await api('/api/overview');
   const rt=d.runs_today;
