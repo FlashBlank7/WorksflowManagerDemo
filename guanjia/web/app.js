@@ -163,8 +163,20 @@ async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
     <div id="run-form">${fields||'<div class="empty" style="padding:8px 0">无输入声明，直接运行</div>'}</div>
     <div class="run-row"><button class="primary" ${S.current.published?'':'disabled'} onclick="runWf(this)">运行</button>
     <span class="note">执行发生在远端，本地只接收结果</span></div>
-    <div id="run-result"></div></div>`;
+    <div id="run-result"></div>
+    <div id="run-history"></div></div>`;
+  loadHistory(id);
   $('wf-detail').scrollIntoView({behavior:'smooth',block:'nearest'})}
+async function loadHistory(id){const box=$('run-history');if(!box)return;
+  try{const runs=await api('/api/workflow/history/'+id);
+    if(!runs.length){box.innerHTML='<div class="empty" style="padding:6px 0">还没跑过</div>';return}
+    box.innerHTML='<h4 class="h-title">最近运行</h4>'+runs.map(r=>{
+      const st=r.status==='succeeded'?'ok':(r.status==='failed'?'bad':'');
+      const mk=r.status==='succeeded'?'✓':(r.status==='failed'?'✕':'…');
+      return '<div class="h-row '+st+'"><span class="h-st">'+mk+'</span>'+
+        '<span class="h-at">'+esc(r.at)+'</span>'+
+        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span></div>'}).join('')}
+  catch(e){box.innerHTML=''}}
 async function runWf(btn){btn.disabled=true;const inputs={};
   document.querySelectorAll('#run-form [data-k]').forEach(el=>{
     try{inputs[el.dataset.k]=el.dataset.json?JSON.parse(el.value):el.value}catch(e){}});
@@ -174,7 +186,7 @@ async function runWf(btn){btn.disabled=true;const inputs={};
     box.innerHTML=r.status==='succeeded'?`<div class="result r-ok">${rows||'(无输出)'}</div>`
       :`<div class="result r-err">状态 ${esc(r.status)}${r.error?'：'+esc(r.error):''}</div>`}
   catch(e){box.innerHTML=`<div class="result r-err">${esc(e.message)}</div>`}
-  btn.disabled=false}
+  btn.disabled=false;if(S.current)loadHistory(S.current.id)}
 async function generate(){const req=$('gen-req').value.trim();
   if(req.length<10){alert('需求至少 10 个字');return}
   $('gen-btn').disabled=true;const p=$('gen-progress');p.classList.add('show');p.textContent='已提交远端，莉莉丝开工…';

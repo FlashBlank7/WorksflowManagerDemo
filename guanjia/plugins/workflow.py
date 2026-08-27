@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 from ..remote import RemoteClient
@@ -88,3 +89,28 @@ def run(remote: RemoteClient, app_id: str, inputs: dict, wait_seconds: float = 4
                     "outputs": outputs, "error": current["state"].get("error")}
         time.sleep(1.5)
     return {"run_id": run_id, "status": "running", "outputs": {}, "error": None}
+
+
+def run_history(remote: RemoteClient, app_id: str, limit: int = 10) -> list[dict]:
+    """最近运行：状态/时间/错误或首个输出摘要，给详情页一眼看。"""
+    runs = remote.request("GET", f"/api/v1/applications/{app_id}/runs?limit={int(limit)}")
+    items = []
+    for r in runs if isinstance(runs, list) else []:
+        state = r.get("state") or {}
+        outputs = {}
+        for value in (state.get("outputs") or {}).values():
+            if isinstance(value, dict):
+                outputs.update(value)
+        brief = ""
+        for key, value in outputs.items():
+            text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+            brief = f"{key} = {text[:80]}"
+            break
+        items.append({
+            "id": r.get("id"),
+            "status": r.get("status"),
+            "at": str(r.get("created_at") or "")[:19].replace("T", " "),
+            "error": str(state.get("error") or r.get("error") or "")[:120],
+            "brief": brief,
+        })
+    return items
