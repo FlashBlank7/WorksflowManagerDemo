@@ -39,6 +39,7 @@ async function checkFailures(){if(!S.user)return;
   catch(e){}}
 let REG=false,PROF='';
 async function pickProfile(){const v=$('lg-prof').value;PROF=v;$('lg-err').textContent='';
+  $('lg-profname').style.display=v?'none':'block';
   const p=(S.profiles||[]).find(x=>x.name===v);
   if(p){$('lg-server').value=p.server||'';if(p.user)$('lg-name').value=p.user}
   if(!v)return;
@@ -49,7 +50,8 @@ function toggleMode(){REG=!REG;$('lg-reg-row').style.display=REG?'block':'none';
   $('lg-switch').textContent=REG?'已有账号？直接登录':'没有账号？注册（首个注册者自动成为管理员）'}
 async function saveConfig(){$('lg-err').textContent='';
   try{await api('/api/config',{server:$('lg-server').value.trim(),mode:REG?'register':'login',
-    name:$('lg-name').value.trim(),password:$('lg-pass').value,profile:PROF||'',
+    name:$('lg-name').value.trim(),password:$('lg-pass').value,
+    profile:PROF||($('lg-profname').value.trim()||''),
     register_token:$('lg-reg')?$('lg-reg').value:''});
     await boot()}catch(e){$('lg-err').textContent=(REG?'注册':'登录')+'失败：'+e.message}}
 function show(v){$('view-chat').classList.toggle('act',v==='chat');
