@@ -15,8 +15,30 @@ from __future__ import annotations
 import sys
 
 
+HELP = """guanjia（管家）— 终端里说人话，远端工厂造出能跑、有定时、可监控的工作流
+
+用法：
+  guanjia                                   对话管家 REPL（招牌）
+  guanjia --login                           终端登录/注册（注册令牌 + 自定用户名密码）
+  guanjia web [--port N] [--open|--app]     本地网页壳（--app 独立窗口）
+  guanjia today                             一眼统筹总览：今日运行/定时/失败
+  guanjia run <工作流> [k=v…] [--json] [--wait N]
+                                            直接跑一个已发布工作流（脚本/cron 用）
+  guanjia remote [list|use <名>|add <名> [服务器]|rm <名>]
+                                            多远端档案切换
+  guanjia doctor                            连接自诊断：配置→可达→登录态→存储
+  guanjia completion bash|zsh               Tab 补全：eval \"$(guanjia completion bash)\"
+  guanjia --version                         版本
+
+REPL 里：直接说人话；命令 /today /wf /remote /new /login /help /quit。
+哪里不对：guanjia doctor。"""
+
+
 def main() -> None:
     args = sys.argv[1:]
+    if args and args[0] in ("-h", "--help", "help"):
+        print(HELP)
+        return
     if args and args[0] in ("--version", "-V"):
         from . import __version__
         print(f"guanjia {__version__}")
