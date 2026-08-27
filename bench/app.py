@@ -80,14 +80,25 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body()
             if self.path == "/api/config":
                 server = str(body.get("server") or "").rstrip("/")
-                token = str(body.get("token") or "").strip()
-                probe = RemoteClient(server, token)
-                me = probe.request("GET", "/api/v1/me")["user"]  # 验证通过才落盘
+                mode = str(body.get("mode") or "login")
+                anon = RemoteClient(server, "")
+                if mode == "register":
+                    result = anon.request("POST", "/api/v1/auth/register", {
+                        "register_token": str(body.get("register_token") or ""),
+                        "name": str(body.get("name") or ""),
+                        "password": str(body.get("password") or ""),
+                    })
+                else:
+                    result = anon.request("POST", "/api/v1/auth/login", {
+                        "name": str(body.get("name") or ""),
+                        "password": str(body.get("password") or ""),
+                    })
+                token = result["token"]  # 只存会话令牌，密码不落盘
                 (Path.home() / ".bench.json").write_text(
                     json.dumps({"server": server, "token": token}, ensure_ascii=False), encoding="utf-8"
                 )
-                Handler.remote = probe
-                self._json({"ok": True, "user": me})
+                Handler.remote = RemoteClient(server, token)
+                self._json({"ok": True, "user": result["user"]})
             elif self.path == "/api/chat":
                 self._json(assistant.chat(self._need_remote(), body.get("messages") or []))
             elif self.path == "/api/workflow/generate":
@@ -278,9 +289,19 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
     <p>本地工作台 · 所有能力由远端平台提供</p>
     <label>远端平台地址</label>
     <input id="lg-server" placeholder="http://服务器:8000" value="">
-    <label>我的访问令牌</label>
-    <input id="lg-token" type="password" placeholder="管理员为你签发的个人令牌">
-    <button class="go" onclick="saveConfig()">连接</button>
+    <label>用户名</label>
+    <input id="lg-name" placeholder="你的用户名">
+    <label>密码</label>
+    <input id="lg-pass" type="password" placeholder="至少 6 位">
+    <div id="lg-reg-row" style="display:none">
+      <label>注册令牌</label>
+      <input id="lg-reg" type="password" placeholder="团队共享的注册令牌">
+    </div>
+    <button class="go" id="lg-go" onclick="saveConfig()">登录</button>
+    <div style="text-align:center;margin-top:12px">
+      <a href="#" id="lg-switch" onclick="toggleMode();return false"
+         style="font-size:12.5px;color:var(--accent);text-decoration:none">没有账号？注册（首个注册者自动成为管理员）</a>
+    </div>
     <div class="login-err" id="lg-err"></div>
   </div>
 </div>
@@ -351,9 +372,15 @@ async function boot(){const d=await api('/api/bootstrap');
   $('u-dot').textContent=(d.user.name||'?').slice(0,1);
   $('conn-note').textContent='已连接 '+d.server;
   renderList()}
+let REG=false;
+function toggleMode(){REG=!REG;$('lg-reg-row').style.display=REG?'block':'none';
+  $('lg-go').textContent=REG?'注册并登录':'登录';
+  $('lg-switch').textContent=REG?'已有账号？直接登录':'没有账号？注册（首个注册者自动成为管理员）'}
 async function saveConfig(){$('lg-err').textContent='';
-  try{const r=await api('/api/config',{server:$('lg-server').value.trim(),token:$('lg-token').value.trim()});
-    await boot()}catch(e){$('lg-err').textContent='连接失败：'+e.message}}
+  try{await api('/api/config',{server:$('lg-server').value.trim(),mode:REG?'register':'login',
+    name:$('lg-name').value.trim(),password:$('lg-pass').value,
+    register_token:$('lg-reg')?$('lg-reg').value:''});
+    await boot()}catch(e){$('lg-err').textContent=(REG?'注册':'登录')+'失败：'+e.message}}
 function show(v){$('view-chat').classList.toggle('act',v==='chat');
   $('view-wf').classList.toggle('act',v==='wf');
   $('nav-chat').classList.toggle('act',v==='chat');
