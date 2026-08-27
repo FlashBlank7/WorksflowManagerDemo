@@ -199,3 +199,8 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .ev-ty{color:var(--sub);white-space:nowrap;font-family:ui-monospace,monospace;font-size:11px}
 .ev-tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .ev-row.bad .ev-ty,.ev-row.bad .ev-tx{color:var(--err)}
+
+/* 新失败红点（统筹入口） */
+.nav-btn{position:relative}
+.nav-btn.dot::after{content:'';position:absolute;top:7px;right:9px;width:7px;height:7px;
+  border-radius:50%;background:var(--err);box-shadow:0 0 0 2px var(--panel)}

@@ -21,7 +21,22 @@ async function boot(){const d=await api('/api/bootstrap');
   $('u-name').textContent=d.user.name;$('u-role').textContent=d.user.role==='admin'?'管理员':'成员';
   $('u-dot').textContent=(d.user.name||'?').slice(0,1);
   $('conn-note').textContent='已连接 '+d.server+(d.profile?'（档案 '+d.profile+'）':'');
-  renderList();setTimeout(()=>{const el=$('chat-input');el&&el.focus()},50)}
+  renderList();watchFailures();setTimeout(()=>{const el=$('chat-input');el&&el.focus()},50)}
+let FAILSEEN=null;
+function watchFailures(){if(S._fw)return;S._fw=setInterval(checkFailures,90000);checkFailures()}
+async function checkFailures(){if(!S.user)return;
+  try{const d=await api('/api/overview');const fails=d.recent_failures||[];
+    if(FAILSEEN===null){FAILSEEN=new Set(fails.map(f=>f.run_id));return}
+    const fresh=fails.filter(f=>!FAILSEEN.has(f.run_id));
+    if(!fresh.length)return;
+    fails.forEach(f=>FAILSEEN.add(f.run_id));
+    $('nav-ov').classList.add('dot');
+    try{if(Notification.permission==='default')Notification.requestPermission();
+      if(Notification.permission==='granted'){const f=fresh[0];
+        new Notification('工作流失败：'+(f.workflow||''),
+          {body:String(f.error||'').slice(0,120)+(fresh.length>1?'（等 '+fresh.length+' 条）':'')})}}
+    catch(e){}}
+  catch(e){}}
 let REG=false,PROF='';
 async function pickProfile(){const v=$('lg-prof').value;PROF=v;$('lg-err').textContent='';
   const p=(S.profiles||[]).find(x=>x.name===v);
@@ -43,7 +58,7 @@ function show(v){$('view-chat').classList.toggle('act',v==='chat');
   $('nav-chat').classList.toggle('act',v==='chat');
   $('nav-wf').classList.toggle('act',v==='wf');
   $('nav-ov').classList.toggle('act',v==='ov');
-  if(v==='wf')boot();if(v==='ov')loadOverview()}
+  if(v==='wf')boot();if(v==='ov'){$('nav-ov').classList.remove('dot');loadOverview()}}
 async function loadOverview(){try{const d=await api('/api/overview');
   const rt=d.runs_today;
   $('ov-stats').innerHTML=`
