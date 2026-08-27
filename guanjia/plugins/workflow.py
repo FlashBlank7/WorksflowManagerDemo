@@ -146,3 +146,29 @@ def _map_events(payload: dict) -> list[dict]:
 
 def run_events(remote: RemoteClient, run_id: str) -> list[dict]:
     return _map_events(remote.request("GET", f"/api/v1/runs/{run_id}/events/list?limit=500"))
+
+
+def rerun(remote: RemoteClient, run_id: str, wait_seconds: float = 45.0) -> dict:
+    """用原输入重跑：读旧 run 的 application_id 与 state.inputs，建新 run。"""
+    old = remote.request("GET", f"/api/v1/runs/{run_id}")
+    app_id = str(old.get("application_id") or "")
+    inputs = (old.get("state") or {}).get("inputs") or {}
+    result = run(remote, app_id, inputs, wait_seconds=wait_seconds)
+    result["application_id"] = app_id
+    result["inputs"] = inputs
+    return result
+
+
+def find_run(remote: RemoteClient, prefix: str) -> str | None:
+    """按 id 前缀在各应用近期运行里找唯一命中；找不到或歧义返回 None。"""
+    hits: set[str] = set()
+    for app in list_workflows(remote):
+        try:
+            runs = remote.request("GET", f"/api/v1/applications/{app['id']}/runs?limit=30")
+        except Exception:  # noqa: BLE001 - 单应用查询失败不拦整体
+            continue
+        for r in runs if isinstance(runs, list) else []:
+            rid = str(r.get("id") or "")
+            if rid.startswith(prefix):
+                hits.add(rid)
+    return hits.pop() if len(hits) == 1 else None

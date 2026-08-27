@@ -91,3 +91,41 @@ def main(argv: list[str]) -> int:
         if result["status"] == "running":
             print(f"  超过 --wait {args.wait:.0f}s 还在跑；稍后可在 REPL 问「run {result['run_id']} 结果如何」")
     return {"succeeded": 0, "failed": 1}.get(result["status"], 3)
+
+
+def rerun_main(argv: list[str]) -> int:
+    """guanjia rerun <run id 或前缀>：用原输入重跑一次失败/成功的运行。"""
+    parser = argparse.ArgumentParser(prog="guanjia rerun", description="用原输入重跑一次运行")
+    parser.add_argument("run_id", help="run id（today/时间线里的前缀即可）")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--wait", type=float, default=120.0)
+    args = parser.parse_args(argv)
+
+    cfg = load_config()
+    if not cfg["token"]:
+        print("未登录：先 guanjia --login", file=sys.stderr)
+        return 1
+    remote = RemoteClient(cfg["server"], cfg["token"])
+    run_id = args.run_id
+    try:
+        if len(run_id) < 32:
+            full = workflow.find_run(remote, run_id)
+            if not full:
+                print(f"按前缀「{run_id}」没找到唯一运行（近期 30 条/应用内检索）", file=sys.stderr)
+                return 2
+            run_id = full
+        result = workflow.rerun(remote, run_id, wait_seconds=args.wait)
+    except RemoteError as error:
+        print(f"远端错误：{error}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        mark = {"succeeded": "✓", "failed": "✕", "running": "…"}.get(result["status"], "?")
+        print(f"{mark} 重跑 {run_id[:8]} → run {result['run_id']} · {result['status']}")
+        for key, value in (result["outputs"] or {}).items():
+            text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+            print(f"  {key} = {text[:500]}")
+        if result.get("error"):
+            print(f"  错误：{str(result['error'])[:300]}")
+    return {"succeeded": 0, "failed": 1}.get(result["status"], 3)

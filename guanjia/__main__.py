@@ -26,6 +26,7 @@ HELP = """guanjia（管家）— 终端里说人话，远端工厂造出能跑�
                                             直接跑一个已发布工作流（脚本/cron 用）
   guanjia remote [list|use <名>|add <名> [服务器]|rm <名>]
                                             多远端档案切换
+  guanjia rerun <run前缀>                   用原输入重跑一次运行
   guanjia doctor                            连接自诊断：配置→可达→登录态→存储
   guanjia completion bash|zsh               Tab 补全：eval \"$(guanjia completion bash)\"
   guanjia --version                         版本
@@ -92,6 +93,9 @@ def main() -> None:
     if args and args[0] == "run":
         from .runcmd import main as run_main
         sys.exit(run_main(args[1:]))
+    if args and args[0] == "rerun":
+        from .runcmd import rerun_main
+        sys.exit(rerun_main(args[1:]))
     if args and args[0] == "doctor":
         from .doctor import run as doctor_run
         sys.exit(doctor_run())

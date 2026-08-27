@@ -199,12 +199,18 @@ async function loadHistory(id){const box=$('run-history');if(!box)return;
     box.innerHTML='<h4 class="h-title">最近运行（点行看过程）</h4>'+runs.map(r=>{
       const st=r.status==='succeeded'?'ok':(r.status==='failed'?'bad':'');
       const mk=r.status==='succeeded'?'✓':(r.status==='failed'?'✕':'…');
+      const rb=r.status==='failed'?'<button class="h-rerun" onclick="rerunRun(\''+r.id+'\',this,event)">重跑</button>':'';
       return '<div class="h-item"><div class="h-row '+st+'" onclick="toggleEvents(\''+r.id+'\',this)">'+
         '<span class="h-st">'+mk+'</span>'+
         '<span class="h-at">'+esc(r.at)+'</span>'+
-        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span></div>'+
+        '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span>'+rb+'</div>'+
         '<div class="h-ev" id="ev-'+r.id+'"></div></div>'}).join('')}
   catch(e){box.innerHTML=''}}
+async function rerunRun(id,btn,ev){ev.stopPropagation();btn.disabled=true;btn.textContent='重跑中…';
+  try{const r=await api('/api/workflow/rerun',{run_id:id});
+    btn.textContent=r.status==='succeeded'?'✓ 成功':(r.status==='failed'?'✕ 又失败':'… 运行中')}
+  catch(e){btn.textContent='出错'}
+  setTimeout(()=>{if(S.current)loadHistory(S.current.id)},1500)}
 async function toggleEvents(id,row){const box=$('ev-'+id);if(!box)return;
   if(box.classList.contains('open')){box.classList.remove('open');return}
   box.classList.add('open');

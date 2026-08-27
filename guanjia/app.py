@@ -179,6 +179,8 @@ class Handler(BaseHTTPRequestHandler):
                     {"message": str(body.get("message") or "")}))
             elif self.path == "/api/workflow/run":
                 self._json(workflow.run(self._need_remote(), body["app_id"], body.get("inputs") or {}))
+            elif self.path == "/api/workflow/rerun":
+                self._json(workflow.rerun(self._need_remote(), str(body.get("run_id") or "")))
             else:
                 self._json({"error": "not found"}, 404)
         except RemoteError as error:

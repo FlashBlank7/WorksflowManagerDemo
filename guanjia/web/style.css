@@ -215,3 +215,8 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .week .b-ok{width:14px;background:var(--accent);border-radius:2px 2px 0 0}
 .week .b-bad{width:14px;background:var(--err);border-radius:2px 2px 0 0}
 .week .bar span{font-size:10px;color:var(--sub);margin-top:4px}
+
+.h-rerun{font-size:11px;padding:2px 8px;border:1px solid var(--line);border-radius:5px;
+  background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap}
+.h-rerun:hover{border-color:var(--accent)}
+.h-rerun:disabled{opacity:.7;cursor:default}
