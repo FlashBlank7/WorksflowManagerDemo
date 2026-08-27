@@ -200,3 +200,14 @@ def follow_run(remote: RemoteClient, run_id: str):
         }
         if etype in TERMINAL_EVENTS:
             return
+
+
+def export_snapshot(remote: RemoteClient, app_id: str) -> dict:
+    """导出：draft 快照（含 workflow/agents/tests/requirement），可搬运的自包含 JSON。"""
+    draft = remote.request("GET", f"/api/v1/applications/{app_id}/draft")
+    return {
+        "guanjia_export": 1,
+        "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "revision": draft.get("revision"),
+        "snapshot": draft["snapshot"],
+    }

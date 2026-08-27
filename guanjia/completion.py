@@ -17,7 +17,7 @@ BASH = r"""_guanjia_complete(){
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=( $(compgen -W "web today remote doctor run rerun completion --login --version" -- "$cur") )
+    COMPREPLY=( $(compgen -W "web today remote doctor run rerun export completion --login --version" -- "$cur") )
     return
   fi
   case "${COMP_WORDS[1]}" in
@@ -28,7 +28,7 @@ BASH = r"""_guanjia_complete(){
         local IFS=$'\n'
         COMPREPLY=( $(compgen -W "$(guanjia _profile-names 2>/dev/null)" -- "$cur") )
       fi;;
-    run)
+    run|export)
       if [ "$COMP_CWORD" -eq 2 ]; then
         local IFS=$'\n'
         COMPREPLY=( $(compgen -W "$(guanjia _wf-names 2>/dev/null)" -- "$cur") )

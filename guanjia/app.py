@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(workflow.run_history(self._need_remote(), self.path.rsplit("/", 1)[1]))
             elif self.path.startswith("/api/workflow/runevents/"):
                 self._json(workflow.run_events(self._need_remote(), self.path.rsplit("/", 1)[1]))
+            elif self.path.startswith("/api/workflow/export/"):
+                self._json(workflow.export_snapshot(self._need_remote(), self.path.rsplit("/", 1)[1]))
             else:
                 self._json({"error": "not found"}, 404)
         except RemoteError as error:

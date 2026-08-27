@@ -188,6 +188,7 @@ async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
     <div class="meta">${esc(S.current.description)}</div>
     <div id="run-form">${fields||'<div class="empty" style="padding:8px 0">无输入声明，直接运行</div>'}</div>
     <div class="run-row"><button class="primary" ${S.current.published?'':'disabled'} onclick="runWf(this)">运行</button>
+    <button onclick="exportWf(this)">导出</button>
     <span class="note">执行发生在远端，本地只接收结果</span></div>
     <div id="run-result"></div>
     <div id="run-history"></div></div>`;
@@ -224,6 +225,14 @@ async function toggleEvents(id,row){const box=$('ev-'+id);if(!box)return;
           '<span class="ev-tx">'+esc(e.label)+(e.extra?' · '+esc(e.extra):'')+'</span></div>'}).join('')
         :'<div class="ev-row"><span class="ev-tx">没有事件记录</span></div>'}
     catch(e){box.innerHTML='<div class="ev-row bad"><span class="ev-tx">'+esc(e.message)+'</span></div>';delete box.dataset.loaded}}}
+async function exportWf(btn){btn.disabled=true;
+  try{const d=await api('/api/workflow/export/'+S.current.id);
+    const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=(S.current.name||'workflow')+'.guanjia.json';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+  catch(e){alert('导出失败：'+e.message)}
+  btn.disabled=false}
 async function runWf(btn){btn.disabled=true;const inputs={};
   document.querySelectorAll('#run-form [data-k]').forEach(el=>{
     try{inputs[el.dataset.k]=el.dataset.json?JSON.parse(el.value):el.value}catch(e){}});

@@ -170,3 +170,41 @@ def rerun_main(argv: list[str]) -> int:
         if result.get("error"):
             print(f"  错误：{str(result['error'])[:300]}")
     return {"succeeded": 0, "failed": 1}.get(result["status"], 3)
+
+
+def export_main(argv: list[str]) -> int:
+    """guanjia export <工作流> [-o 文件|-]：导出可搬运的快照 JSON。"""
+    parser = argparse.ArgumentParser(prog="guanjia export", description="导出工作流快照 JSON")
+    parser.add_argument("name", help="工作流名字（唯一子串）或 id")
+    parser.add_argument("-o", "--out", default=None, help="输出文件；- 表示标准输出")
+    args = parser.parse_args(argv)
+
+    cfg = load_config()
+    if not cfg["token"]:
+        print("未登录：先 guanjia --login", file=sys.stderr)
+        return 1
+    remote = RemoteClient(cfg["server"], cfg["token"])
+    try:
+        target = _resolve(workflow.list_workflows(remote), args.name)
+    except RemoteError as error:
+        print(f"远端不可达或登录失效：{error}", file=sys.stderr)
+        return 1
+    if isinstance(target, list):
+        print(f"找不到唯一匹配「{args.name}」", file=sys.stderr)
+        return 2
+    try:
+        payload = workflow.export_snapshot(remote, target["id"])
+    except RemoteError as error:
+        print(f"导出失败：{error}", file=sys.stderr)
+        return 1
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if args.out == "-":
+        print(text)
+        return 0
+    safe = "".join(c for c in target["name"] if c not in '\\/:*?"<>|') or "workflow"
+    out = args.out or f"{safe}.guanjia.json"
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(text)
+    nodes = len(payload["snapshot"]["workflow"].get("nodes", []))
+    print(f"✓ 已导出「{target['name']}」→ {out}（{nodes} 节点，rev {payload.get('revision')}）")
+    return 0
