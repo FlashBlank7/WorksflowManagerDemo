@@ -6,7 +6,7 @@ import json
 import time
 from datetime import datetime
 
-from ..remote import RemoteClient
+from ..remote import RemoteClient, RemoteError
 
 
 def list_workflows(remote: RemoteClient) -> list[dict]:
