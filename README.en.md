@@ -114,4 +114,4 @@ uv tool install --editable --from . guanjia
 python3 -m unittest discover tests    # zero-dep regression suite
 ```
 
-MIT License. · [中文 README](README.md) · [alternatives](docs/alternatives.md)
+MIT License. · [中文 README](README.md) · [alternatives](docs/alternatives.md) · [known limits](docs/known-limits.md)
