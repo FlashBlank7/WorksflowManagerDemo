@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import time
 import json
 import sys
 from pathlib import Path
@@ -26,6 +27,37 @@ G = "\033[32m"; C = "\033[36m"; D = "\033[2m"; B = "\033[1m"; R = "\033[31m"; N 
 
 def say(text: str) -> None:
     print(f"{G}●{N} {text}")
+
+
+def follow_build(remote: RemoteClient, build_id: str) -> None:
+    """招牌时刻：生成提交后原地跟踪到发布。Ctrl+C 只停止跟踪，构建仍在远端继续。"""
+
+    from .plugins import workflow
+
+    print(f"  {D}跟踪构建 {build_id[:8]}…（Ctrl+C 停止跟踪，不影响远端）{N}")
+    last = ""
+    try:
+        while True:
+            status = workflow.build_status(remote, build_id)
+            line = f"{status['status']} · 修订 {status.get('revision') or 0}"
+            if status.get("narration"):
+                line += f" · {status['narration'][:56]}"
+            if line != last:
+                print(f"  {D}⏳ {line}{N}")
+                last = line
+            if status["status"] in ("published", "ready", "needs_attention", "failed", "cancelled"):
+                if status.get("published_version"):
+                    say(f"搭好了！已发布 v{status['published_version']}——直接说「跑一下」就能用。")
+                elif status.get("pending_question"):
+                    say(f"莉莉丝在等你回答：{status['pending_question']}" + chr(10) + "（直接输入回答，我会转交）")
+                else:
+                    tail = f"：{status['error']}" if status.get("error") else ""
+                    say(f"构建结束（{status['status']}{tail}）——说「继续刚才的构建」可续跑。")
+                return
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print()
+        print(f"{D}已停止跟踪（构建仍在远端进行，/today 或直接问我进度）{N}")
 
 
 def login_flow(server_default: str) -> RemoteClient:
@@ -126,6 +158,10 @@ def main() -> None:
             print(f"  {D}⚙ {action['tool']} → {action['summary']}{N}")
         say(data["text"])
         history.append({"role": "assistant", "text": data["text"]})
+        for action in data["actions"]:
+            if action.get("tool") == "generate_workflow" and action.get("build_id"):
+                follow_build(remote, action["build_id"])
+                break
 
 
 if __name__ == "__main__":
