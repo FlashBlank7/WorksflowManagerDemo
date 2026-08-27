@@ -6,4 +6,4 @@ from ..remote import RemoteClient
 
 
 def chat(remote: RemoteClient, messages: list[dict]) -> dict:
-    return remote.request("POST", "/api/v1/assistant/chat", {"messages": messages[-20:]})
+    return remote.request("POST", "/api/v1/assistant/agent", {"messages": messages[-20:]})
