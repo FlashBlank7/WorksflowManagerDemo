@@ -1,0 +1,309 @@
+"""本地壳的 HTTP 路由：网页端所有功能的必经之路。
+
+此前 25 条路由零测试——今天修的一堆缺陷（错误字段、类型转换、老远端降级）
+全都从这里过。这里起一个真的本地壳，打一个真的桩远端，逐条走。
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+import threading
+import unittest
+import urllib.error
+import urllib.parse
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from guanjia import app as shell
+from guanjia import config as gconfig
+from guanjia import sessions
+from guanjia.remote import RemoteClient
+
+APP = {"id": "app-1", "name": "文本统计", "active_version": 2,
+       "description": "数行数", "display_description": "数行数"}
+
+
+class StubRemote(BaseHTTPRequestHandler):
+    """桩远端：只回答本地壳会问的那些端点。"""
+
+    fail_paths: set = set()          # 这些路径返回 404，用来测老远端降级
+    seen: list = []
+
+    def log_message(self, *args):
+        pass
+
+    def _json(self, code, obj):
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        StubRemote.seen.append(("GET", self.path))
+        path = urllib.parse.unquote(self.path.split("?")[0])
+        if path in StubRemote.fail_paths:
+            return self._json(404, {"detail": "not found"})
+        table = {
+            "/api/v1/me": {"user": {"name": "u", "role": "admin"}},
+            "/api/v1/applications": [APP],
+            "/api/v1/applications/app-1/draft": {
+                "revision": 3,
+                "snapshot": {"name": "文本统计", "requirement": "数行数",
+                             "workflow": {"nodes": [
+                                 {"id": "s", "type": "start", "config": {"inputs": [
+                                     {"name": "text", "label": "文本", "type": "string",
+                                      "example": "第一行\n第二行"}]}}]},
+                             "agents": {}, "tests": []}},
+            "/api/v1/applications/app-1/runs": [
+                {"id": "run-ok", "status": "succeeded", "created_at": "2026-08-28T01:00:00",
+                 "outputs": {"line_count": 2}, "state": {"inputs": {"text": "a\nb"}}},
+                {"id": "run-bad", "status": "failed", "created_at": "2026-08-28T00:00:00",
+                 "error": "node calc failed: 除以零", "outputs": {},
+                 "state": {"inputs": {"text": "x"}}}],
+            "/api/v1/runs/run-ok": {
+                "id": "run-ok", "status": "succeeded", "outputs": {"line_count": 2},
+                "state": {"inputs": {"text": "a\nb"}}, "application_id": "app-1"},
+            "/api/v1/runs/run-new": {
+                "id": "run-new", "status": "succeeded", "outputs": {"line_count": 9},
+                "state": {}, "application_id": "app-1"},
+            "/api/v1/runs/run-ok/events/list": {
+                "run_id": "run-ok", "total": 2, "truncated": False,
+                "events": [{"id": 1, "type": "workflow.started", "at": "2026-08-28T01:00:00",
+                            "data": {}},
+                           {"id": 2, "type": "workflow.completed", "at": "2026-08-28T01:00:05",
+                            "data": {}}]},
+            "/api/v1/runs/run-ok/artifacts": [{"name": "报表.csv", "size": 2048}],
+            "/api/v1/overview": {"date_utc": "2026-08-28",
+                                 "runs_today": {"total": 3, "succeeded": 2, "failed": 1,
+                                                "running": 0},
+                                 "builds_active": 0, "schedules": [], "recent_failures": [],
+                                 "published_workflows": 1, "week": []},
+            "/api/v1/health-report": {"days": 7, "counts": {"broken": 0, "stale": 0, "ok": 1},
+                                      "items": []},
+            "/api/v1/scheduler/health": {"running": True, "alive": True, "tick_count": 5,
+                                         "seconds_since_tick": 3.0},
+            "/api/v1/builds/b-1": {"status": "published", "team_state": {
+                "revision": 4, "published_version": 1, "pending_question": None},
+                "error": ""},
+            "/api/v1/builds/b-1/transcript": {"records": []},
+            "/api/v1/applications/app-1": APP,
+            "/api/v1/applications/app-2/draft": {"revision": 0, "snapshot": {}},
+        }
+        if path == "/api/v1/runs/run-ok/artifacts/报表.csv":
+            body = "名称,数量\n甲,1\n".encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
+        if path in table:
+            return self._json(200, table[path])
+        self._json(404, {"detail": path})
+
+    def do_POST(self):
+        StubRemote.seen.append(("POST", self.path))
+        length = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(length) or b"{}")
+        if self.path == "/api/v1/applications/app-1/runs":
+            return self._json(200, {"run_id": "run-new", "inputs": body.get("inputs")})
+        if self.path == "/api/v1/applications":
+            return self._json(201, {"id": "app-2", "name": body.get("name")})
+        if self.path == "/api/v1/applications/app-2/draft":
+            return self._json(200, {"revision": int(body.get("expected_revision", 0)) + 1})
+        if self.path == "/api/v1/applications/app-2/versions":
+            return self._json(200, {"version": 1})
+        if self.path == "/api/v1/applications/app-2/builds":
+            return self._json(202, {"build_id": "b-1"})
+        if self.path == "/api/v1/builds/b-1/resume":
+            return self._json(200, {"status": "queued"})
+        if self.path == "/api/v1/assistant/agent":
+            return self._json(200, {"text": "好的", "actions": []})
+        self._json(404, {"detail": self.path})
+
+
+class WebRoutesTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.old_home = os.environ.get("HOME")
+        os.environ["HOME"] = cls.tmp.name
+        for key in ("GUANJIA_SERVER", "GUANJIA_TOKEN", "GUANJIA_PROFILE"):
+            os.environ.pop(key, None)
+        cls.old_dir = sessions.DIR
+        sessions.DIR = os.path.join(cls.tmp.name, "sess")
+        from pathlib import Path
+        sessions.DIR = Path(cls.tmp.name) / "sess"
+
+        cls.remote_server = ThreadingHTTPServer(("127.0.0.1", 0), StubRemote)
+        cls.remote_port = cls.remote_server.server_address[1]
+        threading.Thread(target=cls.remote_server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{cls.remote_port}"
+        gconfig.save_login(base, "tok", "u")
+
+        shell.Handler.remote = RemoteClient(base, "tok")
+        cls.shell_server = ThreadingHTTPServer(("127.0.0.1", 0), shell.Handler)
+        cls.port = cls.shell_server.server_address[1]
+        threading.Thread(target=cls.shell_server.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.shell_server.shutdown()
+        cls.shell_server.server_close()
+        cls.remote_server.shutdown()
+        cls.remote_server.server_close()
+        sessions.DIR = cls.old_dir
+        if cls.old_home is not None:
+            os.environ["HOME"] = cls.old_home
+        cls.tmp.cleanup()
+
+    def get(self, path):
+        # 请求行只能是 ascii：中文路径要按浏览器的做法先转义
+        safe = urllib.parse.quote(path, safe="/?=&")
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{safe}")
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.status, response.read(), response.headers
+        except urllib.error.HTTPError as error:
+            return error.code, error.read(), error.headers
+
+    def post(self, path, body):
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}{path}", method="POST",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def json_get(self, path):
+        status, raw, _ = self.get(path)
+        return status, json.loads(raw)
+
+    # ── 静态资源与首页 ──
+    def test_index_and_assets(self):
+        status, body, _ = self.get("/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"lg-prof", body)          # 登录页档案下拉
+        for path, needle in (("/static/app.js", b"loadHealth"),
+                             ("/static/style.css", b".hl-row")):
+            status, body, _ = self.get(path)
+            self.assertEqual(status, 200, path)
+            self.assertIn(needle, body)
+
+    # ── bootstrap ──
+    def test_bootstrap_reports_connected_user_and_profiles(self):
+        status, data = self.json_get("/api/bootstrap")
+        self.assertEqual(status, 200)
+        self.assertTrue(data["connected"])
+        self.assertEqual(data["user"]["name"], "u")
+        self.assertEqual(len(data["workflows"]), 1)
+        self.assertIn("profiles", data)
+        for profile in data["profiles"]:
+            self.assertNotIn("token", profile)   # 令牌绝不能给前端
+
+    # ── 工作流相关 ──
+    def test_inputs_history_events_artifacts(self):
+        status, schema = self.json_get("/api/workflow/inputs/app-1")
+        self.assertEqual(status, 200)
+        self.assertEqual(schema[0]["name"], "text")
+        self.assertIn("\n", schema[0]["example"])    # 多行示例原样传到前端
+
+        status, history = self.json_get("/api/workflow/history/app-1")
+        self.assertEqual(status, 200)
+        failed = [item for item in history if item["status"] == "failed"][0]
+        self.assertIn("除以零", failed["error"])     # 失败原因取顶层 error
+
+        status, rows = self.json_get("/api/workflow/runevents/run-ok")
+        self.assertEqual([row["type"] for row in rows],
+                         ["workflow.started", "workflow.completed"])
+
+        status, arts = self.json_get("/api/workflow/artifacts/run-ok")
+        self.assertEqual(arts[0]["name"], "报表.csv")
+
+    def test_artifact_download_is_binary_passthrough(self):
+        status, body, headers = self.get("/api/workflow/artifact/run-ok/报表.csv")
+        self.assertEqual(status, 200)
+        self.assertIn("名称".encode("utf-8"), body)
+        self.assertEqual(headers.get("Content-Type"), "text/csv")
+
+    def test_run_and_rerun(self):
+        status, result = self.post("/api/workflow/run",
+                                   {"app_id": "app-1", "inputs": {"text": "a\nb"}})
+        self.assertEqual(status, 200)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(result["outputs"], {"line_count": 9})   # 顶层 outputs
+
+        status, again = self.post("/api/workflow/rerun", {"run_id": "run-ok"})
+        self.assertEqual(status, 200)
+        self.assertEqual(again["workflow"], "文本统计")           # 带回当前名
+
+    def test_export_and_import(self):
+        status, payload = self.json_get("/api/workflow/export/app-1")
+        self.assertEqual(payload["guanjia_export"], 1)
+        self.assertEqual(payload["revision"], 3)
+
+        status, result = self.post("/api/workflow/import",
+                                   {"payload": payload, "name": "副本", "publish": False})
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result["name"], "副本")
+        self.assertEqual(result["app_id"], "app-2")
+
+    def test_generate_and_build_status(self):
+        status, result = self.post("/api/workflow/generate",
+                                   {"requirement": "做一个统计文本行数的工作流"})
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result["build_id"], "b-1")
+        status, build = self.json_get(f"/api/workflow/build/{result['build_id']}")
+        self.assertEqual(build["status"], "published")
+        self.assertEqual(build["published_version"], 1)
+
+    # ── 统筹与平台状态 ──
+    def test_overview_health_scheduler(self):
+        status, data = self.json_get("/api/overview")
+        self.assertEqual(data["runs_today"]["total"], 3)
+        status, health = self.json_get("/api/health")
+        self.assertEqual(health["counts"]["ok"], 1)
+        status, sched = self.json_get("/api/scheduler")
+        self.assertTrue(sched["alive"])
+
+    def test_old_remote_degrades_instead_of_erroring(self):
+        """老远端没有体检/调度器端点时，页面要照常而不是报错。"""
+        StubRemote.fail_paths = {"/api/v1/health-report", "/api/v1/scheduler/health"}
+        try:
+            status, health = self.json_get("/api/health")
+            self.assertEqual(status, 200)
+            self.assertTrue(health.get("unsupported"))
+            self.assertEqual(health["items"], [])
+            status, sched = self.json_get("/api/scheduler")
+            self.assertEqual(status, 200)
+            self.assertTrue(sched.get("unsupported"))
+        finally:
+            StubRemote.fail_paths = set()
+
+    # ── 会话 ──
+    def test_sessions_roundtrip(self):
+        status, result = self.post("/api/sessions/save",
+                                   {"id": "s1", "messages": [
+                                       {"role": "user", "text": "你好"},
+                                       {"kind": "answerbox", "build_id": "b-1"}]})
+        self.assertEqual(status, 200, result)
+        status, listed = self.json_get("/api/sessions")
+        self.assertEqual([item["id"] for item in listed], ["s1"])
+        status, one = self.json_get("/api/sessions/s1")
+        self.assertEqual(len(one["messages"]), 1)      # answerbox 不落盘
+
+    # ── 未知路由 ──
+    def test_unknown_route_is_404(self):
+        status, data = self.json_get("/api/什么都不是")
+        self.assertEqual(status, 404)
+        self.assertIn("error", data)
+
+
+if __name__ == "__main__":
+    unittest.main()
