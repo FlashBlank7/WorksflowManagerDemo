@@ -15,6 +15,8 @@
 
 ![guanjia demo](docs/demo.gif)
 
+*Real recording: `doctor` for platform status → `today` for runs and the 7-day trend → ask in chat, run a workflow, get real data.*
+
 ## Why
 
 Conversational terminal agents (aichat, gptme, open-interpreter) edit code and

@@ -15,7 +15,7 @@
 
 ![guanjia demo](docs/demo.gif)
 
-*真实录屏：列出工作流 → 一句话运行 GPU 日报 → 流式回答带真实数据。重录：`python scripts/record_demo.py`（见文件头说明）。*
+*真实录屏：`doctor` 一眼看平台状况 → `today` 看今日与七日趋势 → 对话里问工作流、跑一个拿到真数据。重录：见 `scripts/record_demo.py` 文件头。*
 
 ## 为什么是它
 
