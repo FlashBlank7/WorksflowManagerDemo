@@ -31,6 +31,7 @@ async function boot(){const d=await api('/api/bootstrap');
   S.user=d.user;S.workflows=d.workflows;
   $('u-name').textContent=d.user.name;$('u-role').textContent=d.user.role==='admin'?'管理员':'成员';
   $('u-dot').textContent=(d.user.name||'?').slice(0,1);
+  S.server=d.server;
   $('conn-note').textContent='已连接 '+d.server+(d.profile?'（档案 '+d.profile+'）':'');
   renderList();watchFailures();setTimeout(()=>{const el=$('chat-input');el&&el.focus()},50)}
 let FAILSEEN=null;
@@ -75,6 +76,23 @@ function show(v){$('view-chat').classList.toggle('act',v==='chat');
 function gotoWf(id){  // 从统筹页跳到工作流详情：先切视图，找不到就只切页
   if(!(S.workflows||[]).some(w=>w.id===id)){show('wf');return}
   show('wf');openWf(id)}
+async function loadPlatform(){const box=$('ov-platform');if(!box)return;
+  // 平台自身的死活：工作流都正常不代表平台正常——调度器挂了的话
+  // 定时任务会静默不跑，而"需要处理"区块要等到逾期才看得出来
+  const bits=[];
+  bits.push('<span class="pb-item ok">● 远端 '+esc(S.server||'')+'</span>');
+  try{const s2=await api('/api/scheduler');
+    if(s2.unsupported){bits.push('<span class="pb-item">调度器 未知（远端版本较旧）</span>')}
+    else if(s2.alive){const t=s2.seconds_since_tick;
+      bits.push('<span class="pb-item ok">● 调度器在跑'+
+        (typeof t==='number'?'（'+Math.round(t)+'s 前轮询）':'')+'</span>')}
+    else{bits.push('<span class="pb-item bad">● 调度器异常'+
+      (s2.last_error?'：'+esc(String(s2.last_error).slice(0,60)):
+       (s2.running?'（卡住了，很久没轮询）':'（没在跑）'))+'</span>');
+      bits.push('<span class="pb-hint">定时任务不会自动跑了——重启平台服务，'+
+        '或看服务端日志里的 scheduler.failed</span>')}}
+  catch(e){bits.push('<span class="pb-item">调度器 查不到</span>')}
+  box.innerHTML=bits.join('')}
 async function loadHealth(){const box=$('ov-health');if(!box)return;
   try{const d=await api('/api/health');
     const bad=(d.items||[]).filter(i=>i.state!=='ok');
@@ -90,7 +108,7 @@ async function loadHealth(){const box=$('ov-health');if(!box)return;
         '<span class="hl-rs">'+esc(i.reason)+'</span>'+
         (i.overdue?'<span class="hl-tag">定时没开火</span>':'')+'</div>').join('')+'</div>'}
   catch(e){box.innerHTML=''}}
-async function loadOverview(){loadHealth();try{const d=await api('/api/overview');
+async function loadOverview(){loadPlatform();loadHealth();try{const d=await api('/api/overview');
   const rt=d.runs_today;
   $('ov-stats').innerHTML=`
     <div class="stat"><div class="num">${rt.total}</div><div class="lbl">今日运行</div></div>

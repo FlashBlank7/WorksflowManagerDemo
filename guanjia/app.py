@@ -115,6 +115,15 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path.startswith("/api/sessions/"):
                 data = sessions.load(self.path.rsplit("/", 1)[1])
                 self._json(data or {"error": "not found"}, 200 if data else 404)
+            elif self.path == "/api/scheduler":
+                try:
+                    self._json(self._need_remote().request(
+                        "GET", "/api/v1/scheduler/health"))
+                except RemoteError as error:  # 老远端没有这个端点
+                    if error.status == 404:
+                        self._json({"unsupported": True})
+                    else:
+                        raise
             elif self.path == "/api/health":
                 try:
                     self._json(self._need_remote().request("GET", "/api/v1/health-report"))
