@@ -7,6 +7,7 @@
     guanjia remote          # 多远端档案：list / use <名> / add <名> [服务器] / rm <名>
     guanjia doctor          # 连接自诊断：配置/可达/登录态/会话存储
     guanjia run <工作流>    # 直接跑一个已发布工作流（k=v 传参，--json 机器读）
+    guanjia completion bash|zsh   # 补全脚本：eval "$(guanjia completion bash)"
 """
 
 from __future__ import annotations
@@ -43,6 +44,17 @@ def main() -> None:
             print(f"  ✕ {f['workflow']} @{f['at']}  run {f['run_id']}  {f['error'][:60]}")
         if d["recent_failures"]:
             print("  （想知道为什么失败：guanjia 里问「run <编号> 为什么失败」）")
+        return
+    if args and args[0] == "completion":
+        from .completion import main as completion_main
+        sys.exit(completion_main(args[1:]))
+    if args and args[0] == "_wf-names":
+        from .completion import print_workflow_names
+        print_workflow_names()
+        return
+    if args and args[0] == "_profile-names":
+        from .completion import print_profile_names
+        print_profile_names()
         return
     if args and args[0] == "run":
         from .runcmd import main as run_main
