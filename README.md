@@ -67,6 +67,35 @@ Lilies 平台（自托管远端）：莉莉丝生成 · 工作流运行时 · �
 语言理解与全部工具执行都在服务端（`/api/v1/assistant/agent`），CLI 是薄 REPL——
 所以审计完整、客户端无法伪造结果。
 
+## English
+
+**guanjia** (管家, *butler*) — tell your terminal what you need, get a workflow
+that actually runs, on schedule, with audit trails.
+
+Unlike coding agents (which produce code) or workflow engines' CLIs (which sync
+YAML), guanjia's deliverable is a *living workflow*: you describe a business
+need in plain language, a server-side agent builds it on a self-hosted platform
+— schema-validated nodes, acceptance tests anchored to real numbers from your
+sample data — publishes it, and it keeps running.
+
+```bash
+uv tool install guanjia    # or: uvx guanjia (try without installing)
+guanjia                    # chat REPL — the signature feature
+guanjia today              # one-glance ops: today's runs, schedules, failures
+```
+
+Design choices worth knowing:
+
+- **Thin client**: pure-Python, zero dependencies; the agent loop and every
+  tool call run server-side and are audited — the client cannot fake results.
+- **Honest by construction**: builds are incremental validated operations
+  (never one-shot JSON), empty upstreams produce honest empty results, and
+  the agent answers with numbers traceable to the ledger.
+- **Self-hosted backend**: your models (DeepSeek or any OpenAI-compatible,
+  local vLLM supported), your data, your audit log.
+
+See [docs/alternatives.md](docs/alternatives.md) for detailed comparisons.
+
 ## 开发
 
 ```bash
