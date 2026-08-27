@@ -64,6 +64,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"configured": True, "connected": False,
                                 "server": self.remote.server, "detail": str(error)[:150],
                                 "plugins": PLUGINS, "workflows": []})
+            elif self.path == "/api/overview":
+                self._json(self._need_remote().request("GET", "/api/v1/overview"))
             elif self.path.startswith("/api/workflow/build/"):
                 self._json(workflow.build_status(self._need_remote(), self.path.rsplit("/", 1)[1]))
             elif self.path.startswith("/api/workflow/inputs/"):
@@ -220,6 +222,18 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .send:hover{background:var(--accent-deep)}
 .composer .hint{max-width:760px;margin:8px auto 0;font-size:11.5px;color:var(--faint)}
 
+/* ── 总览 ── */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:8px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:0 1px 2px rgba(20,26,34,.03)}
+.stat .num{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.stat .lbl{font-size:12px;color:var(--sub);margin-top:2px}
+.stat.good .num{color:var(--accent)}.stat.bad .num{color:var(--err)}
+.line-item{display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.line-item:last-child{border:0}
+.line-item b{font-weight:600}
+.line-item .sub2{color:var(--faint);font-size:12px}
+.line-item .right{margin-left:auto;color:var(--sub);font-size:12px}
+
 /* ── 工作流 ── */
 #view-wf{flex:1;display:none;overflow-y:auto;padding:26px 28px}
 #view-wf.act{display:block}
@@ -310,6 +324,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
   <aside>
     <div class="logo"><i>▸</i><b>bench</b></div>
     <button class="nav-btn act" id="nav-chat" onclick="show('chat')"><span class="ic">💬</span>对话</button>
+    <button class="nav-btn" id="nav-ov" onclick="show('ov')"><span class="ic">📊</span>总览</button>
     <button class="nav-btn" id="nav-wf" onclick="show('wf')"><span class="ic">⚙️</span>工作流</button>
     <div class="spacer"></div>
     <div class="user-chip"><div class="dot" id="u-dot">?</div>
@@ -328,6 +343,15 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
           <button class="send" onclick="send()">↑</button>
         </div>
         <div class="hint">本地不运行模型；对话内容发送至远端平台处理</div>
+      </div>
+    </div>
+    <div id="view-ov" class="view-page" style="flex:1;display:none;overflow-y:auto;padding:26px 28px">
+      <div class="wf-col">
+        <div class="stat-row" id="ov-stats"></div>
+        <div class="section-head"><h2>定时任务</h2></div>
+        <div class="detail" style="margin-top:0;padding:6px 20px" id="ov-schedules"></div>
+        <div class="section-head"><h2>近期失败</h2></div>
+        <div class="detail" style="margin-top:0;padding:6px 20px" id="ov-failures"></div>
       </div>
     </div>
     <div id="view-wf"><div class="wf-col">
@@ -383,9 +407,27 @@ async function saveConfig(){$('lg-err').textContent='';
     await boot()}catch(e){$('lg-err').textContent=(REG?'注册':'登录')+'失败：'+e.message}}
 function show(v){$('view-chat').classList.toggle('act',v==='chat');
   $('view-wf').classList.toggle('act',v==='wf');
+  $('view-ov').style.display=v==='ov'?'block':'none';
   $('nav-chat').classList.toggle('act',v==='chat');
   $('nav-wf').classList.toggle('act',v==='wf');
-  if(v==='wf')boot()}
+  $('nav-ov').classList.toggle('act',v==='ov');
+  if(v==='wf')boot();if(v==='ov')loadOverview()}
+async function loadOverview(){try{const d=await api('/api/overview');
+  const rt=d.runs_today;
+  $('ov-stats').innerHTML=`
+    <div class="stat"><div class="num">${rt.total}</div><div class="lbl">今日运行</div></div>
+    <div class="stat good"><div class="num">${rt.succeeded}</div><div class="lbl">成功</div></div>
+    <div class="stat ${rt.failed?'bad':''}"><div class="num">${rt.failed}</div><div class="lbl">失败</div></div>
+    <div class="stat"><div class="num">${d.published_workflows}</div><div class="lbl">已发布工作流</div></div>
+    <div class="stat"><div class="num">${d.builds_active}</div><div class="lbl">生成中</div></div>`;
+  $('ov-schedules').innerHTML=d.schedules.map(s=>`<div class="line-item"><b>${esc(s.workflow)}</b>
+    <span class="sub2">每天 ${s.at}（${esc(s.timezone)}）</span>
+    <span class="right">${s.last_fire_date?'最近触发 '+esc(s.last_fire_date):'尚未触发'}</span></div>`).join('')
+    ||'<div class="line-item sub2">还没有定时任务——在生成需求里写"每天X点自动运行"即可</div>';
+  $('ov-failures').innerHTML=d.recent_failures.map(f=>`<div class="line-item"><b>${esc(f.workflow)}</b>
+    <span class="sub2">${esc(f.error||'').slice(0,60)}</span><span class="right">${esc(f.at)}</span></div>`).join('')
+    ||'<div class="line-item sub2">近期没有失败 🎉</div>'}
+  catch(e){$('ov-stats').innerHTML='<div class="stat bad"><div class="num">!</div><div class="lbl">'+esc(e.message)+'</div></div>'}}
 
 function pushMsg(role,text,wait){S.messages.push({role,text});
   $('chat-col').innerHTML=S.messages.map((m,i)=>`<div class="msg ${m.role==='user'?'user':'bot'}">

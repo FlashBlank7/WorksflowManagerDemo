@@ -7,7 +7,7 @@
     python3 -m bench.cli               # 读 ~/.bench.json（网页端登录过即有）
     python3 -m bench.cli --login       # 终端里登录/注册
 直接说话即可（"跑一下GPU日报"/"有哪些工作流"/"给我做一个……的工作流"）。
-命令：/wf 列表 · /login 重新登录 · /help · /quit
+命令：/today 统筹总览 · /wf 列表 · /login 重新登录 · /help · /quit
 """
 
 from __future__ import annotations
@@ -82,13 +82,27 @@ def main() -> None:
         if text == "/help":
             print(f"{D}直接用自然语言：跑一下GPU日报 / 有哪些工作流 / 昨天日报结果多少 /\n"
                   f"给我做一个「输入文本输出摘要」的工作流……\n"
-                  f"命令：/wf 工作流列表 · /login 重新登录 · /quit 退出{N}")
+                  f"命令：/today 统筹总览 · /wf 工作流列表 · /login 重新登录 · /quit 退出{N}")
             continue
         if text == "/login":
             try:
                 remote = login_flow(remote.server)
             except Exception as error:  # noqa: BLE001
                 print(f"{R}登录失败：{error}{N}")
+            continue
+        if text == "/today":
+            try:
+                d = remote.request("GET", "/api/v1/overview")
+                rt = d["runs_today"]
+                say(f"今日运行 {rt['total']}（✓{rt['succeeded']} ✕{rt['failed']} 进行中{rt['running']}）· "
+                    f"已发布 {d['published_workflows']} · 生成中 {d['builds_active']}")
+                for sch in d["schedules"]:
+                    print(f"  {D}⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}"
+                          f"（最近触发 {sch.get('last_fire_date') or '—'}）{N}")
+                for f in d["recent_failures"][:3]:
+                    print(f"  {R}✕ {f['workflow']} @{f['at']} {f['error'][:50]}{N}")
+            except RemoteError as error:
+                print(f"{R}{error}{N}")
             continue
         if text == "/wf":
             try:
