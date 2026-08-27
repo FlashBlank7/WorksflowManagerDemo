@@ -172,3 +172,31 @@ def find_run(remote: RemoteClient, prefix: str) -> str | None:
             if rid.startswith(prefix):
                 hits.add(rid)
     return hits.pop() if len(hits) == 1 else None
+
+
+def start_run(remote: RemoteClient, app_id: str, inputs: dict) -> str:
+    """只创建不等待，返回 run_id（--follow 用）。"""
+    return remote.request("POST", f"/api/v1/applications/{app_id}/runs",
+                          {"inputs": inputs})["run_id"]
+
+
+TERMINAL_EVENTS = ("workflow.completed", "workflow.failed",
+                   "workflow.cancelled", "workflow.paused")
+
+
+def follow_run(remote: RemoteClient, run_id: str):
+    """直播一个运行的事件（时间线行），terminal 事件后自然收尾。"""
+    t0 = time.time()
+    for event in remote.stream(f"/api/v1/runs/{run_id}/events"):
+        if not isinstance(event, dict):
+            continue
+        etype = str(event.get("_event") or event.get("type") or "")
+        node = str(event.get("node_id") or "")
+        yield {
+            "elapsed": time.time() - t0,
+            "type": etype,
+            "label": str(event.get("title") or node or "")[:60],
+            "error": str(event.get("error") or "")[:160],
+        }
+        if etype in TERMINAL_EVENTS:
+            return

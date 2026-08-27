@@ -31,6 +31,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("pairs", nargs="*", help="输入参数 key=value")
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     parser.add_argument("--wait", type=float, default=120.0, help="最长等待秒数（默认 120）")
+    parser.add_argument("--follow", action="store_true", help="实时滚动事件直到结束")
     args = parser.parse_args(argv)
 
     cfg = load_config()
@@ -76,6 +77,9 @@ def main(argv: list[str]) -> int:
         except RemoteError:
             pass  # 拿不到输入表就按已给参数直跑
 
+    if args.follow:
+        return _follow(remote, target, inputs)
+
     result = workflow.run(remote, target["id"], inputs, wait_seconds=args.wait)
 
     if args.json:
@@ -91,6 +95,43 @@ def main(argv: list[str]) -> int:
         if result["status"] == "running":
             print(f"  超过 --wait {args.wait:.0f}s 还在跑；稍后可在 REPL 问「run {result['run_id']} 结果如何」")
     return {"succeeded": 0, "failed": 1}.get(result["status"], 3)
+
+
+def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
+    """--follow：创建后直播事件流，terminal 后补一段 outputs。"""
+    run_id = workflow.start_run(remote, target["id"], inputs)
+    print(f"▶ {target['name']} · run {run_id}（Ctrl+C 只停跟随，运行继续）")
+    status = "running"
+    try:
+        for row in workflow.follow_run(remote, run_id):
+            mark = "✕" if ("failed" in row["type"] or row["error"]) else "·"
+            line = f"  {row['elapsed']:6.1f}s {mark} {row['type']:<20} {row['label']}"
+            if row["error"]:
+                line += f"  {row['error']}"
+            print(line, flush=True)
+            if row["type"] in workflow.TERMINAL_EVENTS:
+                status = row["type"].rsplit(".", 1)[-1]
+    except KeyboardInterrupt:
+        print("  （已停止跟随，运行仍在远端继续）")
+        return 3
+    outputs: dict = {}
+    error = ""
+    try:
+        final = remote.request("GET", f"/api/v1/runs/{run_id}")
+        for value in ((final.get("state") or {}).get("outputs") or {}).values():
+            if isinstance(value, dict):
+                outputs.update(value)
+        error = str((final.get("state") or {}).get("error") or "")
+    except RemoteError:
+        pass
+    mark = {"completed": "✓", "failed": "✕"}.get(status, "…")
+    print(f"{mark} {status}")
+    for key, value in outputs.items():
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        print(f"  {key} = {text[:500]}")
+    if error:
+        print(f"  错误：{error[:300]}")
+    return 0 if status == "completed" else (1 if status == "failed" else 3)
 
 
 def rerun_main(argv: list[str]) -> int:

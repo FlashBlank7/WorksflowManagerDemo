@@ -36,12 +36,14 @@ class RemoteClient:
         except urllib.error.HTTPError as error:
             raise RemoteError(error.code, error.read().decode("utf-8", errors="replace")) from error
 
-    def stream(self, path: str, body: dict):
-        """SSE 流：逐事件产出 dict。远端不支持时抛 RemoteError 由调用方回退。"""
+    def stream(self, path: str, body: dict | None = None):
+        """SSE 流：逐事件产出 dict；body=None 走 GET（如运行事件直播）。
+        带 event:/id: 行的流会把类型放进 _event、序号放进 _id（不覆盖数据本身的键）。
+        远端不支持时抛 RemoteError 由调用方回退。"""
 
         request = urllib.request.Request(
-            f"{self.server}{path}", method="POST",
-            data=json.dumps(body).encode("utf-8"),
+            f"{self.server}{path}", method="GET" if body is None else "POST",
+            data=None if body is None else json.dumps(body).encode("utf-8"),
             headers={"Authorization": f"Bearer {self.token}",
                      "Content-Type": "application/json", "Accept": "text/event-stream"},
         )
@@ -50,10 +52,22 @@ class RemoteClient:
         except urllib.error.HTTPError as error:
             raise RemoteError(error.code, error.read().decode("utf-8", errors="replace")) from error
         with response:
+            etype = eid = None
             for raw in response:
                 line = raw.decode("utf-8", errors="replace").strip()
-                if line.startswith("data: "):
-                    yield json.loads(line[6:])
+                if line.startswith("event: "):
+                    etype = line[7:]
+                elif line.startswith("id: "):
+                    eid = line[4:]
+                elif line.startswith("data: "):
+                    payload = json.loads(line[6:])
+                    if isinstance(payload, dict):
+                        if etype is not None:
+                            payload.setdefault("_event", etype)
+                        if eid is not None:
+                            payload.setdefault("_id", eid)
+                    yield payload
+                    etype = eid = None
 
     def health(self) -> dict:
         return self.request("GET", "/health")

@@ -33,7 +33,7 @@ BASH = r"""_guanjia_complete(){
         local IFS=$'\n'
         COMPREPLY=( $(compgen -W "$(guanjia _wf-names 2>/dev/null)" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "--json --wait" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--json --wait --follow" -- "$cur") )
       fi;;
     web)
       COMPREPLY=( $(compgen -W "--port --open --app --server --token" -- "$cur") );;
