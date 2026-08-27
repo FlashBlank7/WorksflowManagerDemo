@@ -204,3 +204,14 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .nav-btn{position:relative}
 .nav-btn.dot::after{content:'';position:absolute;top:7px;right:9px;width:7px;height:7px;
   border-radius:50%;background:var(--err);box-shadow:0 0 0 2px var(--panel)}
+
+/* 统筹：近 7 日趋势柱 */
+.week{grid-column:1/-1;display:flex;align-items:flex-end;gap:14px;padding:10px 14px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.week>.lbl{font-size:12px;color:var(--sub);padding-bottom:14px}
+.week .bars{display:flex;gap:10px;align-items:flex-end}
+.week .bar{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  width:26px;min-height:52px}
+.week .b-ok{width:14px;background:var(--accent);border-radius:2px 2px 0 0}
+.week .b-bad{width:14px;background:var(--err);border-radius:2px 2px 0 0}
+.week .bar span{font-size:10px;color:var(--sub);margin-top:4px}

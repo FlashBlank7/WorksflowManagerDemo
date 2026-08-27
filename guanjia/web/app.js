@@ -67,6 +67,15 @@ async function loadOverview(){try{const d=await api('/api/overview');
     <div class="stat ${rt.failed?'bad':''}"><div class="num">${rt.failed}</div><div class="lbl">失败</div></div>
     <div class="stat"><div class="num">${d.published_workflows}</div><div class="lbl">已发布工作流</div></div>
     <div class="stat"><div class="num">${d.builds_active}</div><div class="lbl">生成中</div></div>`;
+  const wk=d.week||[];
+  if(wk.length){const mx=Math.max(1,...wk.map(w=>w.ok+w.fail));
+    $('ov-stats').innerHTML+='<div class="week"><div class="lbl">近 7 日</div><div class="bars">'+
+      wk.map(w=>{const t=w.ok+w.fail;const h=t?Math.max(8,Math.round(36*t/mx)):3;
+        const fh=t?Math.round(h*w.fail/t):0;
+        return '<div class="bar" title="'+w.date+'：成 '+w.ok+' · 败 '+w.fail+'">'+
+          (fh?'<div class="b-bad" style="height:'+fh+'px"></div>':'')+
+          '<div class="b-ok" style="height:'+Math.max(0,h-fh)+'px"></div>'+
+          '<span>'+w.date.slice(8)+'</span></div>'}).join('')+'</div></div>'}
   $('ov-schedules').innerHTML=d.schedules.map(s=>`<div class="line-item"><b>${esc(s.workflow)}</b>
     <span class="sub2">每天 ${s.at}（${esc(s.timezone)}）</span>
     <span class="right">${s.last_fire_date?'最近触发 '+esc(s.last_fire_date):'尚未触发'}</span></div>`).join('')
