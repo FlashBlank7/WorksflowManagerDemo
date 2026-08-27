@@ -14,6 +14,7 @@ from pathlib import Path
 
 from importlib import resources
 
+from . import sessions
 from .config import load_config
 from .plugins import PLUGINS, assistant, workflow
 from .remote import RemoteClient, RemoteError
@@ -73,6 +74,11 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"configured": True, "connected": False,
                                 "server": self.remote.server, "detail": str(error)[:150],
                                 "plugins": PLUGINS, "workflows": []})
+            elif self.path == "/api/sessions":
+                self._json(sessions.list_sessions())
+            elif self.path.startswith("/api/sessions/"):
+                data = sessions.load(self.path.rsplit("/", 1)[1])
+                self._json(data or {"error": "not found"}, 200 if data else 404)
             elif self.path == "/api/overview":
                 self._json(self._need_remote().request("GET", "/api/v1/overview"))
             elif self.path.startswith("/api/workflow/build/"):
@@ -134,6 +140,9 @@ class Handler(BaseHTTPRequestHandler):
                     bool(body.get("thinking_enabled", False)),
                     str(body.get("effort") or "low"),
                 ))
+            elif self.path == "/api/sessions/save":
+                sessions.save(str(body["id"]), body.get("messages") or [])
+                self._json({"ok": True})
             elif self.path == "/api/workflow/answer":
                 self._json(self._need_remote().request(
                     "POST", f"/api/v1/builds/{body['build_id']}/resume",

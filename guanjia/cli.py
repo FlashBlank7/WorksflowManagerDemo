@@ -34,6 +34,7 @@ except ImportError:
 import json
 import sys
 
+from . import sessions
 from .config import load_config
 from .remote import RemoteClient, RemoteError
 
@@ -126,7 +127,12 @@ def main() -> None:
             print(f"{R}登录失败：{error}{N}")
             sys.exit(1)
 
-    history: list[dict] = []
+    sid = sessions.latest_id() or sessions.new_session()
+    stored = sessions.load(sid)
+    history: list[dict] = [m for m in (stored or {}).get("messages", [])
+                           if not m.get("kind") and m.get("text")]
+    if history:
+        print(f"{D}（继续上次对话「{(stored or {}).get('title','')}」，/new 开新对话）{N}")
     while True:
         try:
             text = input(f"{C}❯{N} ").strip()
@@ -137,10 +143,15 @@ def main() -> None:
             continue
         if text in ("/quit", "/q", "exit"):
             break
+        if text == "/new":
+            sid = sessions.new_session()
+            history = []
+            say("新对话开始。")
+            continue
         if text == "/help":
             print(f"{D}直接用自然语言：跑一下GPU日报 / 有哪些工作流 / 昨天日报结果多少 /\n"
                   f"给我做一个「输入文本输出摘要」的工作流……\n"
-                  f"命令：/today 统筹总览 · /wf 工作流列表 · /login 重新登录 · /quit 退出{N}")
+                  f"命令：/today 统筹总览 · /wf 工作流列表 · /new 新对话 · /login 重新登录 · /quit 退出{N}")
             continue
         if text == "/login":
             try:
@@ -211,6 +222,7 @@ def main() -> None:
         if final and not streamed:
             say(final)
         history.append({"role": "assistant", "text": final})
+        sessions.save(sid, history)
         for action in actions:
             if action.get("tool") == "generate_workflow" and action.get("build_id"):
                 follow_build(remote, action["build_id"])
