@@ -46,6 +46,7 @@ guanjia remote     # 多远端档案：list / use <名> / add <名> [服务器] 
 guanjia doctor     # 哪里不对一查便知：配置 → 可达 → 登录态 → 会话存储
 guanjia run GPU日报 --json   # 脚本/cron 直接跑工作流：名字子串即可，退出码可判
 eval "$(guanjia completion bash)"   # Tab 补全（zsh 同理），run 后直接补工作流名
+guanjia export GPU日报 && guanjia import GPU日报.guanjia.json --name 副本   # 搬运工作流
 ```
 
 - **对话即操作**：流式回答；生成工作流时构建进度卡片就地跟踪，莉莉丝提问直接在对话里答

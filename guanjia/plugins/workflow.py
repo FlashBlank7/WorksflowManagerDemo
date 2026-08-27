@@ -211,3 +211,57 @@ def export_snapshot(remote: RemoteClient, app_id: str) -> dict:
         "revision": draft.get("revision"),
         "snapshot": draft["snapshot"],
     }
+
+
+def import_snapshot(remote: RemoteClient, payload: dict,
+                    name: str | None = None, publish: bool = True) -> dict:
+    """导入：建壳 → 元数据/agents → replace_workflow 整片（远端全图校验）→
+    replace_tests（需含 mandatory 用例才发）→ 尝试发布。
+    返回 {app_id, name, revision, published, publish_error, skipped_tests}。"""
+    snap = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else payload
+    if not isinstance(snap.get("workflow"), dict):
+        raise ValueError("不是有效的导出文件：缺 snapshot.workflow")
+    app_name = name or str(snap.get("name") or "导入的工作流")
+    app = remote.request("POST", "/api/v1/applications", {
+        "name": app_name,
+        "description": str(snap.get("description") or ""),
+        "requirement": str(snap.get("requirement") or ""),
+    })
+    app_id = app["id"]
+    revision = remote.request("GET", f"/api/v1/applications/{app_id}/draft")["revision"]
+    seq = 0
+
+    def op(op_name: str, data: dict):
+        nonlocal revision, seq
+        seq += 1
+        result = remote.request("POST", f"/api/v1/applications/{app_id}/draft", {
+            "expected_revision": revision, "idempotency_key": f"import-{seq}",
+            "op": op_name, "data": data,
+        })
+        revision = result["revision"]
+
+    meta = {key: snap[key] for key in ("description", "requirement") if snap.get(key)}
+    if meta:
+        op("set_metadata", meta)
+    for agent in (snap.get("agents") or {}).values():
+        op("upsert_agent", {"agent": agent})
+    op("replace_workflow", {"workflow": snap["workflow"]})
+    tests = snap.get("tests") or []
+    skipped_tests = False
+    if tests:
+        if any(t.get("mandatory") for t in tests):
+            op("replace_tests", {"tests": tests})
+        else:
+            skipped_tests = True  # 远端要求至少一条 mandatory
+    published = False
+    publish_error = ""
+    if publish:
+        try:
+            remote.request("POST", f"/api/v1/applications/{app_id}/versions",
+                           {"acknowledge_warnings": True})
+            published = True
+        except RemoteError as error:
+            publish_error = str(error)[:300]
+    return {"app_id": app_id, "name": app_name, "revision": revision,
+            "published": published, "publish_error": publish_error,
+            "skipped_tests": skipped_tests}

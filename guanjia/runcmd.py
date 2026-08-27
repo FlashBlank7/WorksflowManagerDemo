@@ -208,3 +208,46 @@ def export_main(argv: list[str]) -> int:
     nodes = len(payload["snapshot"]["workflow"].get("nodes", []))
     print(f"✓ 已导出「{target['name']}」→ {out}（{nodes} 节点，rev {payload.get('revision')}）")
     return 0
+
+
+def import_main(argv: list[str]) -> int:
+    """guanjia import <文件> [--name 新名] [--no-publish]：导入快照为新工作流。"""
+    parser = argparse.ArgumentParser(prog="guanjia import", description="导入工作流快照 JSON")
+    parser.add_argument("file", help="guanjia export 产出的 .guanjia.json（- 读标准输入）")
+    parser.add_argument("--name", default=None, help="导入后的名字（默认用快照里的）")
+    parser.add_argument("--no-publish", action="store_true", help="只留草稿，不发布")
+    args = parser.parse_args(argv)
+
+    try:
+        text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
+        payload = json.loads(text)
+    except OSError as error:
+        print(f"读不了文件：{error}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as error:
+        print(f"不是合法 JSON：{error}", file=sys.stderr)
+        return 2
+
+    cfg = load_config()
+    if not cfg["token"]:
+        print("未登录：先 guanjia --login", file=sys.stderr)
+        return 1
+    remote = RemoteClient(cfg["server"], cfg["token"])
+    try:
+        result = workflow.import_snapshot(remote, payload, name=args.name,
+                                          publish=not args.no_publish)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except RemoteError as error:
+        print(f"导入失败：{error}", file=sys.stderr)
+        return 1
+
+    state = "已发布" if result["published"] else "草稿（未发布）"
+    print(f"✓ 导入「{result['name']}」→ {result['app_id'][:8]} · rev {result['revision']} · {state}")
+    if result["skipped_tests"]:
+        print("  测试用例未带 mandatory 标记，已跳过（对话里可让莉莉丝补验收）")
+    if result["publish_error"]:
+        print(f"  发布被拒：{result['publish_error']}")
+        print("  草稿已留好——对话里说「把它跑过验收再发布」即可")
+    return 0 if (result["published"] or not result["publish_error"]) else 1
