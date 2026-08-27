@@ -53,7 +53,7 @@
         <div class="inner">
           <textarea id="chat-input" rows="1" placeholder="输入消息，Enter 发送"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
-          <button class="send" onclick="send()">↑</button>
+          <button class="send" id="send-btn" onclick="send()">↑</button>
         </div>
         <div class="hint">本地不运行模型；对话内容发送至远端平台处理</div>
       </div>
