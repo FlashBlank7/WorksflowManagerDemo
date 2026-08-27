@@ -13,7 +13,9 @@
 ● 卡1 和卡2 显存占用最高（94%）——都是 vLLM 占的。
 ```
 
-<!-- TODO: 15 秒 demo 动图：一句话 → 远端生成 → 工作流真的跑起来 -->
+![guanjia demo](docs/demo.gif)
+
+*真实录屏：列出工作流 → 一句话运行 GPU 日报 → 流式回答带真实数据。重录：`python scripts/record_demo.py`（见文件头说明）。*
 
 ## 为什么是它
 
