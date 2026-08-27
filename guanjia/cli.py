@@ -12,12 +12,27 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import argparse
+import atexit
 import getpass
 import time
+
+try:  # 方向键历史 + 跨会话持久（纯标准库，无 readline 的平台静默降级）
+    import readline
+
+    _HISTORY = Path.home() / ".guanjia_history"
+    try:
+        readline.read_history_file(_HISTORY)
+    except OSError:
+        pass
+    readline.set_history_length(500)
+    atexit.register(lambda: readline.write_history_file(_HISTORY))
+except ImportError:
+    pass
 import json
 import sys
-from pathlib import Path
 
 from .config import load_config
 from .remote import RemoteClient, RemoteError
