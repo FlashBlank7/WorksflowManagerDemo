@@ -42,7 +42,13 @@ guanjia            # 对话管家 REPL（招牌）
 guanjia --login    # 终端登录/注册（注册 = 团队注册令牌 + 自定用户名密码）
 guanjia today      # 不进 REPL，一眼统筹总览
 guanjia web        # 本地网页壳 http://127.0.0.1:7800
+guanjia remote     # 多远端档案：list / use <名> / add <名> [服务器] / rm <名>
 ```
+
+- **对话即操作**：流式回答；生成工作流时构建进度卡片就地跟踪，莉莉丝提问直接在对话里答
+- **会话持久化**：CLI 与 Web 共享 `~/.guanjia/sessions/`，重启接着聊，`/new` 开新对话
+- **多远端**：公司/家里/测试环境各存一个档案，`/remote use` 一键切（env `GUANJIA_PROFILE` 可临时指定）
+- **Web 壳同权同源**：登录、流式对话、markdown 渲染、构建跟踪、统筹面板、工作流表单自动渲染
 
 首次使用注册：管理员给你团队的注册令牌，用户名密码自己定，**首个注册者自动成为管理员**。
 本地只存会话令牌（`~/.guanjia.json`），密码不落盘。
@@ -82,7 +88,12 @@ sample data — publishes it, and it keeps running.
 uv tool install guanjia    # or: uvx guanjia (try without installing)
 guanjia                    # chat REPL — the signature feature
 guanjia today              # one-glance ops: today's runs, schedules, failures
+guanjia web                # local web shell (same account, streaming chat, dashboards)
+guanjia remote             # multiple backend profiles: list / use / add / rm
 ```
+
+Sessions persist locally (`~/.guanjia/sessions/`, shared between CLI and web);
+build progress and the builder's clarifying questions surface right in the chat.
 
 Design choices worth knowing:
 
@@ -99,8 +110,9 @@ See [docs/alternatives.md](docs/alternatives.md) for detailed comparisons.
 ## 开发
 
 ```bash
-uv tool install --from ~/code/bench guanjia   # 源码安装
-python3 -m guanjia                            # 或直接跑
+uv tool install --editable --from ~/code/bench guanjia   # 源码安装（可编辑）
+python3 -m guanjia                                       # 或直接跑
+python3 -m unittest discover tests                       # 回归测试（零依赖）
 ```
 
 MIT License. · [和近邻的详细对比](docs/alternatives.md)
