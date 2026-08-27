@@ -67,7 +67,25 @@ def run() -> int:
             print(f"{BAD} 登录态：请求失败 —— {error}")
             problems.append("网络中途断了，重试一次 guanjia doctor")
 
-    # 4 会话存储
+    # 4 工作流健康（登录成功才查）
+    if reachable and cfg["token"]:
+        try:
+            report = RemoteClient(cfg["server"], cfg["token"], timeout=10.0).request(
+                "GET", "/api/v1/health-report")
+            counts = report.get("counts") or {}
+            bad = [i for i in report.get("items", []) if i.get("state") != "ok"]
+            if not bad:
+                print(f"{OK} 工作流健康：{counts.get('ok', 0)} 个已发布工作流都正常")
+            else:
+                print(f"{WARN} 工作流健康：{len(bad)} 个要看看"
+                      f"（坏 {counts.get('broken', 0)} · 停 {counts.get('stale', 0)}）")
+                for item in bad[:5]:
+                    print(f"    · {item['workflow']}：{item['reason']}")
+                problems.append("上面这些工作流跑不通了——在对话里问「<名字> 为什么失败」看原因")
+        except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
+            pass  # 老版本远端没这个端点：体检跳过，不算问题
+
+    # 5 会话存储
     try:
         sessions.DIR.mkdir(parents=True, exist_ok=True)
         probe = sessions.DIR / ".doctor-probe"

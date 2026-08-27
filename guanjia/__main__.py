@@ -80,6 +80,15 @@ def main() -> None:
             print(f"  ✕ {f['workflow']} @{f['at']}  run {f['run_id']}  {f['error'][:60]}")
         if d["recent_failures"]:
             print("  （想知道为什么失败：guanjia 里问「run <编号> 为什么失败」）")
+        try:
+            report = RemoteClient(cfg["server"], cfg["token"]).request(
+                "GET", "/api/v1/health-report")
+            bad = [i for i in report.get("items", []) if i.get("state") != "ok"]
+            for item in bad[:5]:
+                mark = "✕" if item["state"] == "broken" else "⏸"
+                print(f"  {mark} {item['workflow']}：{item['reason']}")
+        except RemoteError:
+            pass  # 老远端没有体检端点：不影响 today 主体
         return
     if args and args[0] == "completion":
         from .completion import main as completion_main
