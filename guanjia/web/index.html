@@ -10,6 +10,10 @@
   <div class="login-card">
     <div class="logo"><i>▸</i><b>管家</b></div>
     <p>本地工作台 · 所有能力由远端平台提供</p>
+    <div id="lg-prof-row" style="display:none">
+      <label>已保存的远端档案</label>
+      <select id="lg-prof" onchange="pickProfile()"></select>
+    </div>
     <label>远端平台地址</label>
     <input id="lg-server" placeholder="http://服务器:8000" value="">
     <label>用户名</label>

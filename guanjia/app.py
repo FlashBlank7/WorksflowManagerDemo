@@ -17,9 +17,17 @@ from pathlib import Path
 from importlib import resources
 
 from . import sessions
-from .config import load_config, save_login
+from .config import list_profiles, load_config, save_login, use_profile
 from .plugins import PLUGINS, assistant, workflow
 from .remote import RemoteClient, RemoteError
+
+
+def _profiles_meta() -> dict:
+    """给前端的档案元数据——绝不带令牌。"""
+    active, profiles = list_profiles()
+    return {"profile": active, "profiles": [
+        {"name": name, "server": prof.get("server", ""), "user": prof.get("user", "")}
+        for name, prof in profiles.items()]}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -63,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._asset("app.js", "text/javascript; charset=utf-8")
             elif self.path == "/api/bootstrap":
                 if self.remote is None or not self.remote.token:
-                    self._json({"configured": False, "plugins": PLUGINS})
+                    self._json({"configured": False, "plugins": PLUGINS, **_profiles_meta()})
                     return
                 try:
                     me = self.remote.request("GET", "/api/v1/me")["user"]
@@ -71,11 +79,12 @@ class Handler(BaseHTTPRequestHandler):
                         "configured": True, "connected": True,
                         "server": self.remote.server, "user": me, "plugins": PLUGINS,
                         "workflows": workflow.list_workflows(self.remote),
+                        **_profiles_meta(),
                     })
                 except Exception as error:
                     self._json({"configured": True, "connected": False,
                                 "server": self.remote.server, "detail": str(error)[:150],
-                                "plugins": PLUGINS, "workflows": []})
+                                "plugins": PLUGINS, "workflows": [], **_profiles_meta()})
             elif self.path == "/api/sessions":
                 self._json(sessions.list_sessions())
             elif self.path.startswith("/api/sessions/"):
@@ -100,6 +109,22 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/config":
                 server = str(body.get("server") or "").rstrip("/")
                 mode = str(body.get("mode") or "login")
+                if mode == "use":  # 免密切换：档案里的令牌还有效就直接用
+                    pname = str(body.get("profile") or "")
+                    try:
+                        prof = use_profile(pname)
+                    except KeyError:
+                        self._json({"error": f"没有档案「{pname}」"}, 400)
+                        return
+                    client = RemoteClient(prof.get("server", ""), prof.get("token", ""))
+                    try:
+                        user = client.request("GET", "/api/v1/me")["user"]
+                    except Exception:  # noqa: BLE001 - 统一退回密码登录
+                        self._json({"error": "令牌已失效，输入密码重新登录即可"}, 401)
+                        return
+                    Handler.remote = client
+                    self._json({"ok": True, "user": user})
+                    return
                 anon = RemoteClient(server, "")
                 if mode == "register":
                     result = anon.request("POST", "/api/v1/auth/register", {
@@ -113,7 +138,8 @@ class Handler(BaseHTTPRequestHandler):
                         "password": str(body.get("password") or ""),
                     })
                 token = result["token"]  # 只存会话令牌，密码不落盘
-                save_login(server, token, str((result.get("user") or {}).get("name") or ""))
+                save_login(server, token, str((result.get("user") or {}).get("name") or ""),
+                           str(body.get("profile") or "") or None)
                 Handler.remote = RemoteClient(server, token)
                 self._json({"ok": True, "user": result["user"]})
             elif self.path == "/api/chat/stream":

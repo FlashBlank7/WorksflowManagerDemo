@@ -8,21 +8,33 @@ async function boot(){const d=await api('/api/bootstrap');
     $('login').classList.add('show');$('shell').classList.remove('show');
     setTimeout(()=>{($('lg-server').value?$('lg-name'):$('lg-server')).focus()},50);
     if(d.server)$('lg-server').value=d.server;
+    S.profiles=d.profiles||[];const row=$('lg-prof-row');
+    if(S.profiles.length){row.style.display='block';
+      $('lg-prof').innerHTML='<option value="">手动填写…</option>'+S.profiles.map(p=>
+        '<option value="'+esc(p.name)+'"'+(p.name===d.profile?' selected':'')+'>'+esc(p.name)+' — '+esc(p.server)+(p.user?'（'+esc(p.user)+'）':'')+'</option>').join('');
+      if(d.profile&&S.profiles.some(p=>p.name===d.profile))PROF=d.profile}
+    else row.style.display='none';
     if(d.configured&&!d.connected)$('lg-err').textContent='连不上远端：'+(d.detail||'');
     return}
   $('login').classList.remove('show');$('shell').classList.add('show');
   S.user=d.user;S.workflows=d.workflows;
   $('u-name').textContent=d.user.name;$('u-role').textContent=d.user.role==='admin'?'管理员':'成员';
   $('u-dot').textContent=(d.user.name||'?').slice(0,1);
-  $('conn-note').textContent='已连接 '+d.server;
+  $('conn-note').textContent='已连接 '+d.server+(d.profile?'（档案 '+d.profile+'）':'');
   renderList();setTimeout(()=>{const el=$('chat-input');el&&el.focus()},50)}
-let REG=false;
+let REG=false,PROF='';
+async function pickProfile(){const v=$('lg-prof').value;PROF=v;$('lg-err').textContent='';
+  const p=(S.profiles||[]).find(x=>x.name===v);
+  if(p){$('lg-server').value=p.server||'';if(p.user)$('lg-name').value=p.user}
+  if(!v)return;
+  try{await api('/api/config',{mode:'use',profile:v});await boot()}
+  catch(e){$('lg-err').textContent='档案「'+v+'」'+e.message;$('lg-pass').focus()}}
 function toggleMode(){REG=!REG;$('lg-reg-row').style.display=REG?'block':'none';
   $('lg-go').textContent=REG?'注册并登录':'登录';
   $('lg-switch').textContent=REG?'已有账号？直接登录':'没有账号？注册（首个注册者自动成为管理员）'}
 async function saveConfig(){$('lg-err').textContent='';
   try{await api('/api/config',{server:$('lg-server').value.trim(),mode:REG?'register':'login',
-    name:$('lg-name').value.trim(),password:$('lg-pass').value,
+    name:$('lg-name').value.trim(),password:$('lg-pass').value,profile:PROF||'',
     register_token:$('lg-reg')?$('lg-reg').value:''});
     await boot()}catch(e){$('lg-err').textContent=(REG?'注册':'登录')+'失败：'+e.message}}
 function show(v){$('view-chat').classList.toggle('act',v==='chat');
