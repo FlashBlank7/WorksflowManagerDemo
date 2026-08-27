@@ -1,9 +1,9 @@
-"""单命令入口：`bench` = 对话管家（招牌）；`bench web` = 本地网页壳。
+"""单命令入口：`guanjia` = 对话管家（招牌）；`guanjia web` = 本地网页壳。
 
-    bench                 # 进入 CLI 管家 REPL
-    bench --login         # 终端登录/注册
-    bench web [--port N]  # 启动本地网页壳
-    bench today           # 一眼统筹总览（不进 REPL）
+    guanjia                 # 进入 CLI 管家 REPL
+    guanjia --login         # 终端登录/注册
+    guanjia web [--port N]  # 启动本地网页壳
+    guanjia today           # 一眼统筹总览（不进 REPL）
 """
 
 from __future__ import annotations
