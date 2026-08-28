@@ -307,11 +307,10 @@ def import_snapshot(remote: RemoteClient, payload: dict,
     if not isinstance(snap.get("workflow"), dict):
         raise ValueError("不是有效的导出文件：缺 snapshot.workflow")
     app_name = name or str(snap.get("name") or "导入的工作流")
-    app = remote.request("POST", "/api/v1/applications", {
-        "name": app_name,
-        "description": str(snap.get("description") or ""),
-        "requirement": str(snap.get("requirement") or ""),
-    })
+    created_meta = {"description": str(snap.get("description") or ""),
+                    "requirement": str(snap.get("requirement") or "")}
+    app = remote.request("POST", "/api/v1/applications",
+                         {"name": app_name, **created_meta})
     app_id = app["id"]
     revision = remote.request("GET", f"/api/v1/applications/{app_id}/draft")["revision"]
     seq = 0
@@ -325,19 +324,37 @@ def import_snapshot(remote: RemoteClient, payload: dict,
         })
         revision = result["revision"]
 
-    meta = {key: snap[key] for key in ("description", "requirement") if snap.get(key)}
-    if meta:
-        op("set_metadata", meta)
-    for agent in (snap.get("agents") or {}).values():
-        op("upsert_agent", {"agent": agent})
-    op("replace_workflow", {"workflow": snap["workflow"]})
-    tests = snap.get("tests") or []
-    skipped_tests = False
-    if tests:
-        if any(t.get("mandatory") for t in tests):
-            op("replace_tests", {"tests": tests})
-        else:
-            skipped_tests = True  # 远端要求至少一条 mandatory
+    # 只补建壳时没带上的元数据。建壳已经把 description/requirement 写进去了，
+    # 再原样发一次是空操作，远端会 422「draft operation would not change the
+    # workflow」——整个导入就断在这里，导出的工作流搬不过去。
+    try:
+        # 只补建壳时没带上的元数据。建壳已经把 description/requirement 写进去了，
+        # 再原样发一次是空操作，远端会 422「draft operation would not change the
+        # workflow」——整个导入就断在这里，导出的工作流搬不过去。
+        meta = {key: snap[key] for key in ("description", "requirement")
+                if snap.get(key) and snap[key] != created_meta.get(key)}
+        if meta:
+            op("set_metadata", meta)
+        for agent in (snap.get("agents") or {}).values():
+            op("upsert_agent", {"agent": agent})
+        op("replace_workflow", {"workflow": snap["workflow"]})
+        tests = snap.get("tests") or []
+        skipped_tests = False
+        if tests:
+            if any(t.get("mandatory") for t in tests):
+                op("replace_tests", {"tests": tests})
+            else:
+                skipped_tests = True  # 远端要求至少一条 mandatory
+    except Exception:
+        # 壳是先建的：中途失败就把它收起来，别在列表里留一具空壳。
+        # 真机上一次失败的导入就这么留下了一个同名草稿，
+        # 下次按名字找它时变成「有歧义，匹配到多个」。
+        try:
+            remote.request("POST", f"/api/v1/applications/{app_id}/archive",
+                           {"archived": True})
+        except Exception:  # noqa: BLE001 - 老远端没有归档接口，收不掉就算了
+            pass
+        raise
     published = False
     publish_error = ""
     if publish:

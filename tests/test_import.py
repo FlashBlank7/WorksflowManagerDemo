@@ -85,9 +85,11 @@ class ImportTest(unittest.TestCase):
 
     def test_full_import_sequence(self):
         result = workflow.import_snapshot(self.remote, {"guanjia_export": 1, "snapshot": SNAP})
+        # 不再发 set_metadata：建壳时已经把 description/requirement 写进去了，
+        # 再原样发一次是空操作，真机远端 422，整个导入断在这里。
         self.assertEqual([o[0] for o in StubApi.ops],
-                         ["set_metadata", "upsert_agent", "replace_workflow", "replace_tests"])
-        self.assertEqual([o[1] for o in StubApi.ops], [0, 1, 2, 3])  # revision 跟踪
+                         ["upsert_agent", "replace_workflow", "replace_tests"])
+        self.assertEqual([o[1] for o in StubApi.ops], [0, 1, 2])  # revision 跟踪
         self.assertTrue(result["published"])
         self.assertEqual(result["app_id"], "app-new")
 
