@@ -204,7 +204,10 @@ async function send(){const t=$('chat-input').value.trim();if(!t||S.sending)retu
         if(ev.type==='delta'&&ev.text){cur().text+=ev.text;renderChat(true)}
         else if(ev.type==='action'){
           const bubble=S.messages.pop();
-          S.messages.push({role:'assistant',kind:'action',text:`${ev.tool} → ${ev.summary||''}`,
+          // 显示用服务端给的中文名（老服务端没有 label，退回 tool）；
+          // tool 仍然留在对象里，下面按它找 generate_workflow。
+          S.messages.push({role:'assistant',kind:'action',
+            text:`${ev.label||ev.tool} → ${ev.summary||''}`,
             tool:ev.tool,build_id:ev.build_id});
           S.messages.push(bubble);renderChat(true)}
         else if(ev.type==='final'){cur().text=ev.text||cur().text||'(空回复)';sawFinal=true}

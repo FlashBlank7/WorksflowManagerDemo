@@ -373,7 +373,9 @@ def main() -> None:
                         print()
                         in_text = False
                     actions.append(event)
-                    print(f"  {D}⚙ {event.get('tool')} → {event.get('summary')}{N}")
+                    # 优先用服务端给的中文名；老服务端没有 label，退回 tool
+                    name = event.get("label") or event.get("tool")
+                    print(f"  {D}⚙ {name} → {event.get('summary')}{N}")
                 elif kind == "final":
                     final = event.get("text", "")
                     if pending:
@@ -389,7 +391,8 @@ def main() -> None:
                 data = remote.request("POST", "/api/v1/assistant/agent", {"messages": history[-12:]})
                 actions, final = data["actions"], data["text"]
                 for action in actions:
-                    print(f"  {D}⚙ {action['tool']} → {action['summary']}{N}")
+                    name = action.get("label") or action.get("tool")
+                    print(f"  {D}⚙ {name} → {action['summary']}{N}")
             except RemoteError as error:
                 print(f"{R}远端出错：{error}{N}")
                 history.pop()
