@@ -39,6 +39,7 @@ try:  # 方向键历史 + 跨会话持久（纯标准库，无 readline 的平�
 except ImportError:
     readline = None  # type: ignore[assignment]
 import json
+import re
 import sys
 
 from . import sessions
@@ -72,6 +73,20 @@ if readline:
     readline.set_completer_delims(" ")
     readline.set_completer(_completer)
     readline.parse_and_bind("tab: complete")
+
+
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_CODE = re.compile(r"`([^`]+)`")
+
+
+def render_md(line: str) -> str:
+    """把模型写的 markdown 渲染成终端能看的样子。
+
+    网页壳的 md() 做同一件事（改一边记得同步另一边）：
+    终端里不渲染的话，**加粗** 就是四个星号，看着像坏了。
+    """
+    line = _MD_BOLD.sub(f"{B}\\1{N}", line)
+    return _MD_CODE.sub(f"{D}\\1{N}", line)
 
 
 def say(text: str) -> None:
@@ -311,6 +326,7 @@ def main() -> None:
             continue
         history.append({"role": "user", "text": text})
         actions, final, streamed = [], "", False
+        pending = ""   # 攒着可能跨分片的 markdown 标记
         try:
             in_text = False
             for event in remote.stream("/api/v1/assistant/agent/stream", {"messages": history[-12:]}):
@@ -319,7 +335,14 @@ def main() -> None:
                     if not in_text:
                         print(f"{G}●{N} ", end="", flush=True)
                         in_text = True
-                    print(event["text"], end="", flush=True)
+                    pending += event["text"]
+                    # 有 markdown 标记就攒到行尾再渲染；没有就照常一个字一个字冒
+                    while "\n" in pending:
+                        line, pending = pending.split("\n", 1)
+                        print(render_md(line))
+                    if not ("*" in pending or "`" in pending):
+                        print(pending, end="", flush=True)
+                        pending = ""
                     streamed = True
                 elif kind == "action":
                     if in_text:
@@ -329,6 +352,9 @@ def main() -> None:
                     print(f"  {D}⚙ {event.get('tool')} → {event.get('summary')}{N}")
                 elif kind == "final":
                     final = event.get("text", "")
+                    if pending:
+                        print(render_md(pending), end="")
+                        pending = ""
                     if in_text:
                         print()
                         in_text = False
