@@ -75,9 +75,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    class BadBody(ValueError):
+        """请求体不合法——是调用方发错了，不是服务端坏了。"""
+
     def _body(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(length) or b"{}")
+        raw = self.rfile.read(length) or b"{}"
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            # 原本直接抛出去，变成 500 + "Expecting value: line 1 column 1"
+            raise self.BadBody("请求体不是合法的 JSON") from None
+        if not isinstance(parsed, dict):
+            # 原本一路 body.get(...) 才炸，报的是
+            # "'list' object has no attribute 'get'"——调用方看不懂
+            raise self.BadBody(
+                f"请求体要是一个 JSON 对象，收到的是 {type(parsed).__name__}")
+        return parsed
 
     def _need_remote(self) -> RemoteClient:
         if self.remote is None or not self.remote.token:
@@ -242,6 +256,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/config":
                 server = str(body.get("server") or "").rstrip("/")
                 mode = str(body.get("mode") or "login")
+                # 地址填错是最常见的一步。不先拦的话，urllib 会抛
+                # "unknown url type: 'xxx'"，在网页上表现为一句
+                # 「本地壳处理这个请求时出错了」——用户根本不知道是地址写错了
+                if mode != "use" and server and not server.startswith(
+                        ("http://", "https://")):
+                    self._json({"error": "服务器地址要以 http:// 或 https:// 开头，"
+                                         f"收到的是「{server[:60]}」"}, 400)
+                    return
                 if mode == "use":  # 免密切换：档案里的令牌还有效就直接用
                     pname = str(body.get("profile") or "")
                     try:
@@ -324,10 +346,16 @@ class Handler(BaseHTTPRequestHandler):
                     publish=bool(body.get("publish", True))))
             else:
                 self._json({"error": "not found"}, 404)
+        except self.BadBody as error:
+            self._json({"error": str(error)}, 400)
         except RemoteError as error:
             self._json({"error": str(error)}, 401 if error.status == 401 else 502)
         except Exception as error:  # noqa: BLE001
-            self._json({"error": str(error)}, 500)
+            # 兜底：异常原文（AttributeError 之类）对调用方毫无意义，
+            # 只在本地终端留一行给维护者看
+            print(f"[web] 处理 {self.path} 时出错：{error!r}", file=sys.stderr)
+            self._json({"error": "本地壳处理这个请求时出错了，"
+                                 "详情看终端输出"}, 500)
 
 
 def _make_server(host: str, port: int) -> ThreadingHTTPServer:
