@@ -175,6 +175,16 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path.startswith("/api/sessions/"):
                 data = sessions.load(self.path.rsplit("/", 1)[1])
                 self._json(data or {"error": "not found"}, 200 if data else 404)
+            elif self.path.startswith("/api/workflow/archivable"):
+                days = self.path.split("days=")[-1] if "days=" in self.path else "3"
+                try:
+                    self._json(self._need_remote().request(
+                        "GET", f"/api/v1/applications-archivable?days_idle={int(days)}"))
+                except RemoteError as error:      # 老远端没有归档能力
+                    if error.status == 404:
+                        self._json({"total": 0, "items": [], "unsupported": True})
+                    else:
+                        raise
             elif self.path == "/api/scheduler":
                 try:
                     self._json(self._need_remote().request(
@@ -291,6 +301,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(workflow.run(self._need_remote(), body["app_id"], body.get("inputs") or {}))
             elif self.path == "/api/workflow/rerun":
                 self._json(workflow.rerun(self._need_remote(), str(body.get("run_id") or "")))
+            elif self.path == "/api/workflow/archive":
+                app_id = str(body.get("app_id") or "")
+                archived = bool(body.get("archived", True))
+                self._json(self._need_remote().request(
+                    "POST",
+                    f"/api/v1/applications/{app_id}/archive?archived="
+                    f"{'true' if archived else 'false'}"))
             elif self.path == "/api/workflow/import":
                 self._json(workflow.import_snapshot(
                     self._need_remote(), body.get("payload") or {},

@@ -288,3 +288,11 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .logo i{font-family:var(--mono);font-style:normal;font-weight:600;
   color:var(--accent);opacity:.9}
 .logo b{letter-spacing:.02em}
+
+/* 未发布卡片上的收起动作：默认藏着，悬停才出现——别让它抢走注意力 */
+.wf-card{position:relative}
+.wf-archive{position:absolute;right:10px;bottom:10px;opacity:0;transition:opacity .12s;
+  font-size:11px;padding:2px 8px;border:1px solid var(--line);border-radius:5px;
+  background:var(--panel);color:var(--sub);cursor:pointer}
+.wf-card:hover .wf-archive{opacity:1}
+.wf-archive:hover{border-color:var(--warn);color:var(--warn)}

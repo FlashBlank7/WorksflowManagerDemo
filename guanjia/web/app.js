@@ -220,6 +220,25 @@ async function send(){const t=$('chat-input').value.trim();if(!t||S.sending)retu
     catch(e2){cur().text='远端出错：'+e2.message;renderChat(false)}}
   S.sending=false;$('send-btn').disabled=false;const ci=$('chat-input');ci&&ci.focus()}
 
+async function tidyWorkflows(){
+  // 只给建议、由用户点头——跟对话里那条工具同一个规矩
+  let data;
+  try{data=await api('/api/workflow/archivable?days=3')}
+  catch(e){alert('查不到可收拾的：'+e.message);return}
+  if(data.unsupported){alert('这个后端还不支持归档（版本较旧）');return}
+  const items=data.items||[];
+  if(!items.length){alert('按「从没发布且从没成功跑过」这个标准，没有可收的。');return}
+  const preview=items.slice(0,8).map(i=>'· '+i.name+'（跑过 '+i.runs+' 次）').join('\n');
+  const more=items.length>8?('\n…还有 '+(items.length-8)+' 个'):'';
+  if(!confirm('这些从没发布也从没成功跑过：\n\n'+preview+more+
+      '\n\n收起来？数据不会删，之后能拿回来。'))return;
+  let done=0,failed=0;
+  for(const item of items){
+    try{await api('/api/workflow/archive',{app_id:item.id,archived:true});done++}
+    catch(e){failed++}
+  }
+  alert('收起了 '+done+' 个'+(failed?('，'+failed+' 个没成功'):'')+'。');
+  boot()}
 function togglePub(){S.onlyPub=!S.onlyPub;$('wf-pub').classList.toggle('on',S.onlyPub);renderList()}
 function renderList(){const q=($('wf-search').value||'').toLowerCase();
   const list=S.workflows.filter(w=>(!S.onlyPub||w.published)&&(!q||(w.name+w.description).toLowerCase().includes(q)));
@@ -228,7 +247,13 @@ function renderList(){const q=($('wf-search').value||'').toLowerCase();
     <div class="wf-card ${S.current&&S.current.id===w.id?'sel':''}" onclick="openWf('${w.id}')">
       <h4>${esc(w.name)}</h4><div class="desc">${esc(w.description)}</div>
       <span class="badge ${w.published?'b-on':'b-off'}">${w.published?'v'+w.version+' 已发布':'未发布'}</span>
+      ${w.published?'':`<button class="wf-archive" title="从列表收起（数据不删）"
+        onclick="archiveOne('${w.id}','${esc(w.name).replace(/'/g,"&#39;")}',event)">收起</button>`}
     </div>`).join('')||'<div class="empty">没有匹配的工作流</div>'}
+async function archiveOne(id,name,ev){ev.stopPropagation();
+  if(!confirm('把「'+name+'」从列表收起来？数据不会删，之后能拿回来。'))return;
+  try{await api('/api/workflow/archive',{app_id:id,archived:true});boot()}
+  catch(e){alert('收起失败：'+e.message)}}
 async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
   let schema=[];try{schema=await api('/api/workflow/inputs/'+id)}catch(e){}
   S.schema=schema;
