@@ -17,6 +17,11 @@ from .remote import RemoteClient, RemoteError, next_step
 
 MARKS = {"succeeded": "✓", "failed": "✕", "cancelled": "⊘", "paused": "⏸",
          "running": "…", "queued": "⋯"}
+# 状态码是给机器看的。--json 那条路照给（脚本按它判），
+# 人看的那一行换成中文——服务端今天把状态码从各个出口都堵掉了，
+# 客户端这边还印着 `run run-0001 · succeeded`。
+WORDS = {"succeeded": "跑成了", "failed": "没跑成", "cancelled": "取消了",
+         "paused": "停下等人填", "running": "还在跑", "queued": "排队中"}
 EXIT_CODES = {"succeeded": 0, "failed": 1, "cancelled": 1, "paused": 4}
 
 
@@ -131,7 +136,9 @@ def main(argv: list[str]) -> int:
         print(json.dumps({"workflow": target["name"], **result}, ensure_ascii=False))
     else:
         mark = MARKS.get(result["status"], "?")
-        print(f"{mark} {target['name']} · run {result['run_id']} · {result['status']}")
+        # 没见过的状态宁可只印符号，也不把英文码抬出去
+        word = WORDS.get(result["status"], "情况不明")
+        print(f"{mark} {target['name']} · {word} · run {result['run_id']}")
         for key, value in (result["outputs"] or {}).items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
             print(f"  {key} = {text[:500]}")
@@ -230,7 +237,8 @@ def rerun_main(argv: list[str]) -> int:
     else:
         mark = MARKS.get(result["status"], "?")
         label = f"{result.get('workflow') or '工作流'} · " if result.get("workflow") else ""
-        print(f"{mark} {label}重跑 {run_id[:8]} → run {result['run_id']} · {result['status']}")
+        word = WORDS.get(result["status"], "情况不明")
+        print(f"{mark} {label}重跑 {run_id[:8]} → {word} · run {result['run_id']}")
         for key, value in (result["outputs"] or {}).items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
             print(f"  {key} = {text[:500]}")

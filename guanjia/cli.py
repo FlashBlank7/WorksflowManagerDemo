@@ -107,6 +107,16 @@ def stream_chunk(pending: str, chunk: str) -> tuple[str, str]:
     return "".join(out), pending
 
 
+# 构建状态的中文说法。状态码是给机器看的，别印给人——
+# 2026-08-29 之前这里印的是 `building · 修订 3`、`构建结束（needs_attention）`。
+# 服务端同一天把状态码从各条出口都堵掉了，客户端这两处漏着。
+BUILD_WORDS = {
+    "queued": "排队中", "building": "搭建中", "running": "搭建中",
+    "published": "已发布", "ready": "搭好了", "cancelled": "已放弃",
+    "failed": "没搭成", "needs_attention": "停下来等你说话",
+}
+
+
 def render_md(line: str) -> str:
     """把模型写的 markdown 渲染成终端能看的样子。
 
@@ -143,7 +153,7 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
                     return
                 time.sleep(4)
                 continue
-            line = f"{status['status']} · 修订 {status.get('revision') or 0}"
+            line = f"{BUILD_WORDS.get(status['status'], '进行中')} · 修订 {status.get('revision') or 0}"
             if status.get("narration"):
                 line += f" · {status['narration'][:56]}"
             if line != last:
@@ -176,7 +186,7 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
                     say("空回答未发送——之后说「继续刚才的构建」再答。")
                 else:
                     tail = f"：{status['error']}" if status.get("error") else ""
-                    say(f"构建结束（{status['status']}{tail}）——说「继续刚才的构建」可续跑。")
+                    say(f"构建结束（{BUILD_WORDS.get(status['status'], '情况不明')}{tail}）——说「继续刚才的构建」可续跑。")
                 return
             time.sleep(5)
     except KeyboardInterrupt:

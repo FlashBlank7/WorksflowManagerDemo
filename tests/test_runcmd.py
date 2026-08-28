@@ -81,7 +81,9 @@ class RunCmdTest(unittest.TestCase):
     def test_substring_match_success(self):
         code, out, _ = self._run(["GPU"])
         self.assertEqual(code, 0, out)
-        self.assertIn("succeeded", out)
+        # 2026-08-29 起人看的那行印中文状态（状态码只留给 --json）
+        self.assertIn("跑成了", out)
+        self.assertNotIn("succeeded", out)
         self.assertIn("卡0 94%", out)  # 嵌套 outputs 拍平
 
     def test_json_output(self):
