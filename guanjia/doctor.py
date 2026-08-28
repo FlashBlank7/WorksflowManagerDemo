@@ -90,7 +90,34 @@ def run() -> int:
             print(f"{BAD} 登录态：请求失败 —— {error}")
             problems.append("网络中途断了，重试一次 guanjia doctor")
 
-    # 4 工作流健康（登录成功才查）
+    # 4 调度器：**不管工作流健不健康都查一次**
+    #
+    # 原先只在"已经有工作流误点（stale）"时才查。可调度器刚死、还没到
+    # 任何定时点的时候，一个工作流都不会 stale——于是 doctor 什么也没查，
+    # 却在最后打出「一切正常」。而定时不开火恰恰是那种无声的故障：
+    # 用户不会收到任何提示，只是报表再也不来了。
+    #
+    # 诊断工具最不该做的事，就是在没查过某个部件的情况下宣布全好。
+    sched: dict | None = None
+    if reachable and cfg["token"]:
+        sched = _scheduler_health(cfg)
+        if sched is None:
+            print(f"{WARN} 调度器：没验（远端没有这个接口，多半是旧版本）")
+        elif sched.get("alive"):
+            behind = sched.get("seconds_since_tick")
+            print(f"{OK} 调度器在跑（{behind:.0f}s 前刚轮询过）"
+                  if isinstance(behind, (int, float)) else f"{OK} 调度器在跑")
+        else:
+            since = sched.get("seconds_since_tick")
+            detail = (sched.get("last_error") or "").strip()
+            print(f"{BAD} 调度器停了："
+                  + (f"上次轮询在 {since:.0f}s 前" if isinstance(since, (int, float))
+                     else "从没轮询过")
+                  + (f"；{detail}" if detail else ""))
+            problems.append("定时任务不会开火了：重启平台服务，"
+                            "或看服务端日志里 scheduler.failed 事件")
+
+    # 5 工作流健康（登录成功才查）
     if reachable and cfg["token"]:
         try:
             report = RemoteClient(cfg["server"], cfg["token"], timeout=10.0).request(
@@ -116,29 +143,15 @@ def run() -> int:
                     # 还在跑不是问题，说一句免得用户以为要动手
                     print("    （「等」的那些还在跑或等人工确认，不用管）")
                 if any(item.get("state") == "stale" for item in bad):
-                    # 「去看看调度器还在不在」是句没法落地的建议——直接查给用户看
-                    sched = _scheduler_health(cfg)
+                    # 调度器上面已经查过一次了，这里只据结果给建议，不重复打印
                     if sched is None:
                         problems.append("没按时开火的那几个：先手动跑一次确认工作流本身"
                                         "没问题（guanjia run <名字>）")
                     elif sched.get("alive"):
-                        behind = sched.get("seconds_since_tick")
-                        print(f"{OK} 调度器在跑（{behind:.0f}s 前刚轮询过，"
-                              f"已轮询 {sched.get('tick_count', 0)} 轮）"
-                              if isinstance(behind, (int, float)) else
-                              f"{OK} 调度器在跑")
                         problems.append("调度器是活的，但上面那些没按时开火——"
-                                        "多半是工作流的定时配置改过没发布：先 guanjia run <名字> "
+                                        "多半是工作流的定时配置改过没发布：先 guanjia run "
                                         "手动跑一次，再在对话里确认它的定时设置")
-                    else:
-                        detail = (sched.get("last_error") or "").strip()
-                        since = sched.get("seconds_since_tick")
-                        print(f"{BAD} 调度器不正常："
-                              + (f"上次轮询在 {since:.0f}s 前" if isinstance(since, (int, float))
-                                 else "从没轮询过")
-                              + (f"；{detail}" if detail else ""))
-                        problems.append("定时不开火的根因在这里：重启平台服务，"
-                                        "或看服务端日志里 scheduler.failed 事件")
+                    # 调度器已经报停了的话，上面那条 problems 就是根因，不用再加
         except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
             pass  # 老版本远端没这个端点：体检跳过，不算问题
 
