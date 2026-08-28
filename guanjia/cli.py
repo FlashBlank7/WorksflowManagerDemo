@@ -37,7 +37,7 @@ import sys
 
 from . import sessions
 from .config import list_profiles, load_config, save_login, use_profile
-from .remote import RemoteClient, RemoteError
+from .remote import RemoteClient, RemoteError, RemoteUnreachable
 
 G = "\033[32m"; C = "\033[36m"; D = "\033[2m"; B = "\033[1m"; R = "\033[31m"; N = "\033[0m"
 
@@ -144,8 +144,12 @@ def main() -> None:
         try:
             me = remote.request("GET", "/api/v1/me")["user"]
             say(f"你好，{me['name']}。我是工作流管家——直接说事，/help 看帮助。")
+        except RemoteUnreachable as error:
+            # 平台没起来 ≠ 令牌失效：把人推进登录流程只会更糊涂
+            print(f"{R}{error}{N}\n先确认远端平台在跑，或用 guanjia doctor 自查。")
+            sys.exit(1)
         except RemoteError:
-            remote = None
+            remote = None   # 令牌失效才重新登录
     if remote is None:
         try:
             remote = login_flow(cfg["server"])

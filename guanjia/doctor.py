@@ -11,7 +11,7 @@ import urllib.error
 
 from . import sessions
 from .config import list_profiles, load_config
-from .remote import RemoteClient, RemoteError
+from .remote import RemoteClient, RemoteError, RemoteUnreachable
 
 OK = "\x1b[32m✓\x1b[0m"
 BAD = "\x1b[31m✕\x1b[0m"
@@ -48,8 +48,16 @@ def run() -> int:
     try:
         anon.health()
         reachable = True
-    except RemoteError:
+    except RemoteUnreachable as error:
+        # 必须排在 RemoteError 前面：它是子类，顺序反了就会把"连不上"报成"有响应"
+        print(f"{BAD} 可达性：{error}")
+        problems.append("确认远端平台已启动、地址端口没写错（guanjia remote 查看档案）")
+    except RemoteError as error:
         reachable = True
+        if "不是 JSON" in str(error):
+            print(f"{BAD} 可达性：{cfg['server']} 有东西在应答，但不像 guanjia 平台")
+            problems.append("地址可能指错了：核对 guanjia remote 里的 server")
+            reachable = False
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         reason = getattr(error, "reason", error)
         print(f"{BAD} 可达性：连不上 {cfg['server']} —— {reason}")
