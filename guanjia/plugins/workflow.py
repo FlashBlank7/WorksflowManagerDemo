@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from datetime import datetime
 
@@ -349,11 +350,18 @@ def import_snapshot(remote: RemoteClient, payload: dict,
         # 壳是先建的：中途失败就把它收起来，别在列表里留一具空壳。
         # 真机上一次失败的导入就这么留下了一个同名草稿，
         # 下次按名字找它时变成「有歧义，匹配到多个」。
+        cleaned = True
         try:
             remote.request("POST", f"/api/v1/applications/{app_id}/archive",
                            {"archived": True})
         except Exception:  # noqa: BLE001 - 老远端没有归档接口，收不掉就算了
-            pass
+            cleaned = False
+        # 让调用方能如实告诉用户「留下的东西清没清掉」：
+        # 不换异常类型（调用方按 RemoteError 分支处理），只挂个标记
+        error = sys.exc_info()[1]
+        if error is not None:
+            error.guanjia_import_cleaned = cleaned
+            error.guanjia_import_app_id = app_id
         raise
     published = False
     publish_error = ""

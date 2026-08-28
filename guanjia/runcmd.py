@@ -308,7 +308,16 @@ def import_main(argv: list[str]) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except RemoteError as error:
-        print(f"导入失败：{error}\n{next_step(error)}", file=sys.stderr)
+        print(f"导入失败：{error}", file=sys.stderr)
+        # 壳是先建的：告诉用户那半截东西清没清掉，别让他自己去列表里找
+        if getattr(error, "guanjia_import_cleaned", None) is True:
+            print("（这次导入建了一半的空壳已经替你收起来了，列表里不会多出东西）",
+                  file=sys.stderr)
+        elif getattr(error, "guanjia_import_cleaned", None) is False:
+            app_id = getattr(error, "guanjia_import_app_id", "")
+            print(f"（没能收起建了一半的空壳 {app_id[:8]}，可能要手动收一下）",
+                  file=sys.stderr)
+        print(next_step(error), file=sys.stderr)
         return 1
 
     state = "已发布" if result["published"] else "草稿（未发布）"

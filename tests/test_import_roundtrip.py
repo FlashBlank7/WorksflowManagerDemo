@@ -74,6 +74,26 @@ class ImportRoundTripTest(unittest.TestCase):
         self.assertEqual(len(archived), 1, "失败的导入在列表里留下了空壳")
         self.assertTrue(archived[0][1]["archived"])
 
+    def test_the_exception_says_whether_cleanup_worked(self):
+        # 调用方要能如实告诉用户「留下的东西清没清掉」
+        remote = _Remote(fail_op="replace_workflow")
+        with self.assertRaises(RuntimeError) as caught:
+            workflow.import_snapshot(remote, {"snapshot": SNAP}, publish=False)
+        self.assertIs(caught.exception.guanjia_import_cleaned, True)
+        self.assertEqual(caught.exception.guanjia_import_app_id, "app-1")
+
+    def test_failed_cleanup_is_reported_as_such(self):
+        class NoArchive(_Remote):
+            def request(self, method, path, body=None):
+                if path.endswith("/archive"):
+                    raise RuntimeError("remote 404")
+                return super().request(method, path, body)
+
+        remote = NoArchive(fail_op="replace_workflow")
+        with self.assertRaises(RuntimeError) as caught:
+            workflow.import_snapshot(remote, {"snapshot": SNAP}, publish=False)
+        self.assertIs(caught.exception.guanjia_import_cleaned, False)
+
     def test_success_does_not_archive_anything(self):
         remote = _Remote()
         workflow.import_snapshot(remote, {"snapshot": SNAP}, publish=False)
