@@ -37,6 +37,13 @@ REPL 里：直接说人话；命令 /today /wf /remote /new /login /help /quit�
 哪里不对：guanjia doctor。"""
 
 
+# 所有子命令。打错时用它给提示，也用它挡住 argparse 的英文报错。
+KNOWN_COMMANDS = frozenset({
+    "web", "today", "run", "rerun", "remote", "doctor",
+    "export", "import", "completion", "help",
+})
+
+
 def main() -> None:
     args = sys.argv[1:]
     if args and args[0] in ("-h", "--help", "help"):
@@ -158,6 +165,19 @@ def main() -> None:
         else:
             print("用法：guanjia remote [list | use <名> | add <名> [服务器] | rm <名>]")
         return
+    # 打错子命令时别把 argparse 的英文用法吐给用户。
+    # 之前 `guanjia 蛤蟆` 回的是：
+    #   usage: python -m guanjia [-h] [--login] [--server SERVER]
+    #   python -m guanjia: error: unrecognized arguments: 蛤蟆
+    # 一句中文没有，也没说清有哪些命令——而 HELP 里全都写着。
+    # 不以 - 开头的第一个参数只可能是子命令，能在这里判掉。
+    if args and not args[0].startswith("-") and args[0] not in KNOWN_COMMANDS:
+        near = [c for c in KNOWN_COMMANDS if c.startswith(args[0][:2])]
+        print(f"没有「{args[0]}」这个命令。"
+              + (f"你是想说 {'、'.join(near)}？" if near else ""))
+        print(f"可用的：{'、'.join(sorted(KNOWN_COMMANDS))}")
+        print("完整用法：guanjia --help；直接敲 guanjia 进对话。")
+        sys.exit(2)
     from .cli import main as cli_main
     cli_main()
 

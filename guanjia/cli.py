@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import argparse
+
+from .argparse_zh import ChineseArgumentParser
 import atexit
 import getpass
 import time
@@ -238,7 +239,7 @@ def login_flow(server_default: str, profile: str | None = None) -> RemoteClient:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="guanjia CLI — 工作流管家")
+    parser = ChineseArgumentParser(description="guanjia CLI — 工作流管家")
     parser.add_argument("--login", action="store_true")
     parser.add_argument("--server", default=None)
     args = parser.parse_args()

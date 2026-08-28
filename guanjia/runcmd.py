@@ -7,7 +7,8 @@
 
 from __future__ import annotations
 
-import argparse
+
+from .argparse_zh import ChineseArgumentParser
 import json
 import sys
 
@@ -35,7 +36,7 @@ def _resolve(items: list[dict], needle: str):
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="guanjia run", description="直接运行一个已发布工作流")
+    parser = ChineseArgumentParser(prog="guanjia run", description="直接运行一个已发布工作流")
     parser.add_argument("name", help="工作流名字（支持唯一子串）或 id")
     parser.add_argument("pairs", nargs="*", help="输入参数 key=value")
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON")
@@ -209,7 +210,7 @@ def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
 
 def rerun_main(argv: list[str]) -> int:
     """guanjia rerun <run id 或前缀>：用原输入重跑一次失败/成功的运行。"""
-    parser = argparse.ArgumentParser(prog="guanjia rerun", description="用原输入重跑一次运行")
+    parser = ChineseArgumentParser(prog="guanjia rerun", description="用原输入重跑一次运行")
     parser.add_argument("run_id", help="run id（today/时间线里的前缀即可）")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--wait", type=float, default=120.0)
@@ -249,7 +250,7 @@ def rerun_main(argv: list[str]) -> int:
 
 def export_main(argv: list[str]) -> int:
     """guanjia export <工作流> [-o 文件|-]：导出可搬运的快照 JSON。"""
-    parser = argparse.ArgumentParser(prog="guanjia export", description="导出工作流快照 JSON")
+    parser = ChineseArgumentParser(prog="guanjia export", description="导出工作流快照 JSON")
     parser.add_argument("name", help="工作流名字（唯一子串）或 id")
     parser.add_argument("-o", "--out", default=None, help="输出文件；- 表示标准输出")
     args = parser.parse_args(argv)
@@ -291,7 +292,7 @@ def export_main(argv: list[str]) -> int:
 
 def import_main(argv: list[str]) -> int:
     """guanjia import <文件> [--name 新名] [--no-publish]：导入快照为新工作流。"""
-    parser = argparse.ArgumentParser(prog="guanjia import", description="导入工作流快照 JSON")
+    parser = ChineseArgumentParser(prog="guanjia import", description="导入工作流快照 JSON")
     parser.add_argument("file", help="guanjia export 产出的 .guanjia.json（- 读标准输入）")
     parser.add_argument("--name", default=None, help="导入后的名字（默认用快照里的）")
     parser.add_argument("--no-publish", action="store_true", help="只留草稿，不发布")

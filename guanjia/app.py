@@ -8,7 +8,8 @@ POST /api/v1/users 为每人签发），保存于 ~/.bench.json。
 
 from __future__ import annotations
 
-import argparse
+
+from .argparse_zh import ChineseArgumentParser
 import json
 import os
 import sys
@@ -412,7 +413,7 @@ def _launch(url: str, app_mode: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="guanjia — 本地工作台（远端服务客户端）")
+    parser = ChineseArgumentParser(description="guanjia — 本地工作台（远端服务客户端）")
     parser.add_argument("--server", default=None)
     parser.add_argument("--token", default=None)
     parser.add_argument("--port", type=int, default=7800)
