@@ -21,7 +21,16 @@ def new_session() -> str:
     return uuid4().hex[:8]
 
 
-def save(sid: str, messages: list[dict]) -> None:
+def save(sid: str, messages: list[dict]) -> bool:
+    """存盘失败返回 False 而不是抛——HOME 只读/磁盘满时，
+    招牌 REPL 不该在莉莉丝答完之后崩掉并把整段对话带走。"""
+    try:
+        return _save(sid, messages)
+    except OSError:
+        return False
+
+
+def _save(sid: str, messages: list[dict]) -> bool:
     DIR.mkdir(parents=True, exist_ok=True)
     first_user = next((m for m in messages if m.get("role") == "user" and m.get("text")), None)
     _path(sid).write_text(json.dumps({
@@ -30,6 +39,7 @@ def save(sid: str, messages: list[dict]) -> None:
         "updated_at": time.strftime("%Y-%m-%d %H:%M"),
         "messages": [m for m in messages if m.get("kind") != "answerbox"][-200:],
     }, ensure_ascii=False), encoding="utf-8")
+    return True
 
 
 def load(sid: str) -> dict | None:

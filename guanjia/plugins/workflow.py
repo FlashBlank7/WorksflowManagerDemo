@@ -134,6 +134,22 @@ def _result_error(run: dict) -> str:
     return str(run.get("error") or (run.get("state") or {}).get("error") or "")
 
 
+def wait_for(remote: RemoteClient, run_id: str, wait_seconds: float = 45.0) -> dict:
+    """等一个已创建的运行出结果。run() 与 --follow 的降级路径共用。"""
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        current = remote.request("GET", f"/api/v1/runs/{run_id}")
+        if current["status"] in TERMINAL_STATUSES:
+            result = {"run_id": run_id, "status": current["status"],
+                      "outputs": _result_outputs(current), "error": _result_error(current),
+                      "by": str(current.get("triggered_by") or "")}
+            if current["status"] == "paused":
+                result["waiting_node_id"] = (current.get("state") or {}).get("waiting_node_id")
+            return result
+        time.sleep(1.5)
+    return {"run_id": run_id, "status": "running", "outputs": {}, "error": None, "by": ""}
+
+
 def run(remote: RemoteClient, app_id: str, inputs: dict, wait_seconds: float = 45.0) -> dict:
     created = remote.request("POST", f"/api/v1/applications/{app_id}/runs", {"inputs": inputs})
     run_id = created["run_id"]
@@ -282,6 +298,9 @@ def import_snapshot(remote: RemoteClient, payload: dict,
     """导入：建壳 → 元数据/agents → replace_workflow 整片（远端全图校验）→
     replace_tests（需含 mandatory 用例才发）→ 尝试发布。
     返回 {app_id, name, revision, published, publish_error, skipped_tests}。"""
+    if not isinstance(payload, dict):
+        # 典型来源：guanjia export X -o - | jq '.snapshot.workflow.nodes' | guanjia import -
+        raise ValueError("不是有效的导出文件：顶层应该是一个对象")
     snap = payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else payload
     if not isinstance(snap.get("workflow"), dict):
         raise ValueError("不是有效的导出文件：缺 snapshot.workflow")

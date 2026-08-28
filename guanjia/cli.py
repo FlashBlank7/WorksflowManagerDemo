@@ -29,7 +29,13 @@ try:  # 方向键历史 + 跨会话持久（纯标准库，无 readline 的平�
     except OSError:
         pass
     readline.set_history_length(500)
-    atexit.register(lambda: readline.write_history_file(_HISTORY))
+    def _save_history() -> None:
+        try:
+            readline.write_history_file(_HISTORY)
+        except OSError:
+            pass          # HOME 只读时退出不该吐第二段栈
+
+    atexit.register(_save_history)
 except ImportError:
     readline = None  # type: ignore[assignment]
 import json
@@ -79,9 +85,20 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
 
     print(f"  {D}跟踪构建 {build_id[:8]}…（Ctrl+C 停止跟踪，不影响远端）{N}")
     last = ""
+    misses = 0            # 远端抖一下不该让整个 REPL 带栈退出
     try:
         while True:
-            status = workflow.build_status(remote, build_id)
+            try:
+                status = workflow.build_status(remote, build_id)
+                misses = 0
+            except (RemoteError, OSError) as error:
+                misses += 1
+                if misses >= 3:
+                    say(f"跟踪中断（{error}）——构建仍在远端进行，"
+                        "稍后 /today 或直接问我进度。")
+                    return
+                time.sleep(4)
+                continue
             line = f"{status['status']} · 修订 {status.get('revision') or 0}"
             if status.get("narration"):
                 line += f" · {status['narration'][:56]}"
@@ -100,7 +117,16 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
                         say("先不回答也行——之后说「继续刚才的构建」再答。")
                         return
                     if answer:
-                        remote.request("POST", f"/api/v1/builds/{build_id}/resume", {"message": answer})
+                        try:
+                            remote.request(
+                                "POST", f"/api/v1/builds/{build_id}/resume",
+                                {"message": answer})
+                        except (RemoteError, OSError) as error:
+                            # 别让用户刚敲的答案凭空蒸发
+                            say(f"转交失败（{error}）。你刚才的回答是：")
+                            print(f"  {D}{answer}{N}")
+                            say("远端恢复后说「继续刚才的构建」再贴一次。")
+                            return
                         say("已转交，继续跟踪。")
                         continue
                     say("空回答未发送——之后说「继续刚才的构建」再答。")
@@ -287,7 +313,8 @@ def main() -> None:
         if final and not streamed:
             say(final)
         history.append({"role": "assistant", "text": final})
-        sessions.save(sid, history)
+        if not sessions.save(sid, history):
+            print(f"{D}（会话没能存到 {sessions.DIR}——这轮对话不会保留）{N}")
         for action in actions:
             if action.get("tool") == "generate_workflow" and action.get("build_id"):
                 follow_build(remote, action["build_id"])

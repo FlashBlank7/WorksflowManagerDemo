@@ -5,6 +5,7 @@
 outputs 读 state 里逐节点拍平的中间态，展示出来是某个中间节点的 payload。
 """
 
+import os
 import unittest
 
 from guanjia.plugins import workflow
@@ -90,3 +91,55 @@ class InputCoercionTest(unittest.TestCase):
         for raw, kind in [("不是JSON", "array"), ("abc", "number"), ("3.5", "integer")]:
             with self.assertRaises(workflow.InputTypeError):
                 workflow.coerce_input(raw, kind)
+
+
+class ColdPathGuardTest(unittest.TestCase):
+    """冷路径审计（2026-08-28）确认过的几条，锁住别回去。"""
+
+    def test_import_rejects_non_dict_payload(self):
+        """典型来源：export -o - | jq '.snapshot.workflow.nodes' | import -"""
+        for payload in ([], None, "hi", 123):
+            with self.assertRaises(ValueError) as caught:
+                workflow.import_snapshot(None, payload)      # 校验在任何网络请求之前
+            self.assertIn("顶层应该是一个对象", str(caught.exception))
+
+    def test_save_returns_false_instead_of_raising(self):
+        """HOME 只读时，招牌 REPL 不该在答完之后崩掉并把整段对话带走。"""
+        import tempfile
+        from pathlib import Path as _Path
+
+        from guanjia import sessions
+
+        old = sessions.DIR
+        tmp = tempfile.mkdtemp()
+        try:
+            os.chmod(tmp, 0o555)
+            sessions.DIR = _Path(tmp) / "sessions"
+            self.assertIs(sessions.save("s1", [{"role": "user", "text": "你好"}]), False)
+        finally:
+            os.chmod(tmp, 0o755)
+            sessions.DIR = old
+
+    def test_save_returns_true_when_writable(self):
+        import tempfile
+        from pathlib import Path as _Path
+
+        from guanjia import sessions
+
+        old = sessions.DIR
+        with tempfile.TemporaryDirectory() as tmp:
+            sessions.DIR = _Path(tmp) / "sessions"
+            try:
+                self.assertIs(sessions.save("s1", [{"role": "user", "text": "你好"}]), True)
+                self.assertEqual(sessions.load("s1")["messages"][0]["text"], "你好")
+            finally:
+                sessions.DIR = old
+
+    def test_wait_for_is_shared_by_run_and_follow(self):
+        """--follow 直播不通时要落回这个等待函数，而不是把已建好的 run 丢半路。"""
+        self.assertTrue(callable(workflow.wait_for))
+        from guanjia import runcmd as rc
+
+        source = __import__("inspect").getsource(rc._follow)
+        self.assertIn("workflow.wait_for", source)
+        self.assertIn("except (RemoteError, OSError)", source)

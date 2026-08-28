@@ -146,6 +146,12 @@ def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
     except KeyboardInterrupt:
         print("  （已停止跟随，运行仍在远端继续）")
         return 3
+    except (RemoteError, OSError) as error:
+        # 老远端没有事件直播端点、或直播中途断了——run 已经建好了，
+        # 别把它丢在半路，落回轮询等结果
+        print(f"  （这个远端不支持事件直播或直播中断：{error}；改为等待结果）")
+        final = workflow.wait_for(remote, run_id, wait_seconds=180.0)
+        status = final["status"]
     outputs: dict = {}
     error = ""
     final: dict = {}
@@ -240,8 +246,12 @@ def export_main(argv: list[str]) -> int:
         return 0
     safe = "".join(c for c in target["name"] if c not in '\\/:*?"<>|') or "workflow"
     out = args.out or f"{safe}.guanjia.json"
-    with open(out, "w", encoding="utf-8") as f:
-        f.write(text)
+    try:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError as error:
+        print(f"写不了 {out}：{error}", file=sys.stderr)
+        return 2
     nodes = len(payload["snapshot"]["workflow"].get("nodes", []))
     print(f"✓ 已导出「{target['name']}」→ {out}（{nodes} 节点，rev {payload.get('revision')}）")
     return 0
@@ -260,6 +270,10 @@ def import_main(argv: list[str]) -> int:
         payload = json.loads(text)
     except OSError as error:
         print(f"读不了文件：{error}", file=sys.stderr)
+        return 2
+    except UnicodeDecodeError:
+        print("文件不是 UTF-8 文本——快照要用 guanjia export 产出的 .guanjia.json",
+              file=sys.stderr)
         return 2
     except json.JSONDecodeError as error:
         print(f"不是合法 JSON：{error}", file=sys.stderr)
