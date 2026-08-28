@@ -453,6 +453,23 @@ class AccessKeyTest(unittest.TestCase):
         self.assertIn(b"lg-prof", body)                 # 首页真的出来了
         self.assertIn("guanjia_key=secret-key-123", headers.get("Set-Cookie", ""))
 
+    def test_non_ascii_key_is_rejected_not_reset(self):
+        """compare_digest 对非 ASCII 字符串抛 TypeError——它在鉴权路径上，
+        抛出去就是连接被重置（curl 52），而不是干净的 401。"""
+        status, _, _ = self._raw("/?k=%E4%B8%AD%E6%96%87")
+        self.assertEqual(status, 401)
+
+    def test_non_ascii_cookie_is_rejected_not_reset(self):
+        """urllib 自己不肯发非 ASCII 头，所以裸 socket 发——要测的是服务端会不会断连。"""
+        import socket
+
+        raw = ('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n'
+               'Cookie: guanjia_key="\u4e2d\u6587"\r\nConnection: close\r\n\r\n')
+        with socket.create_connection(("127.0.0.1", self.port), timeout=20) as sock:
+            sock.sendall(raw.encode("utf-8"))
+            head = sock.recv(64).decode("latin-1")
+        self.assertIn("401", head.splitlines()[0])   # 不是连接被重置
+
     def test_cookie_works_for_later_requests(self):
         status, body, _ = self._raw(
             "/static/app.js", headers={"Cookie": "guanjia_key=secret-key-123"})
@@ -487,16 +504,6 @@ class RemoteHintTest(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
-
-    def test_non_ascii_key_is_rejected_not_reset(self):
-        """compare_digest 对非 ASCII 字符串抛 TypeError——它在鉴权路径上，
-        抛出去就是连接被重置（curl 52），而不是干净的 401。"""
-        status, _, _ = self._raw("/?k=%E4%B8%AD%E6%96%87")
-        self.assertEqual(status, 401)
-
-    def test_non_ascii_cookie_is_rejected_not_reset(self):
-        status, _, _ = self._raw("/", headers={"Cookie": 'guanjia_key="中文"'})
-        self.assertEqual(status, 401)
 
 
 class WebStartupTest(unittest.TestCase):
