@@ -83,6 +83,19 @@ class ShapeCheckEndToEndTest(unittest.TestCase):
                 "runs_today": {"total": 0, "succeeded": 0, "failed": 0},
                 "published_workflows": 1, "builds_active": 0,
                 "schedules": [], "recent_failures": []},
+            # 需要 ID 的那批：先让取样拿得到 a，再让每条路径都在。
+            # 原先 _complete() 只有上面三个，名字叫"完整"其实只覆盖三分之一——
+            # 2026-08-29 补 ID 端点时它先红了，红得对。
+            "/api/v1/applications/a/runs": [{"id": "a"}],
+            "/api/v1/applications/a/builds": [{"id": "a"}],
+            "/api/v1/applications/a": {"id": "a", "name": "甲"},
+            "/api/v1/applications/a/draft": {},
+            "/api/v1/applications/a/versions": [],
+            "/api/v1/builds/a": {},
+            "/api/v1/builds/a/transcript": {},
+            "/api/v1/runs/a": {"status": "succeeded"},
+            "/api/v1/runs/a/artifacts": [],
+            "/api/v1/runs/a/events/list": [],
         }
 
     def test_complete_shapes_pass(self):
