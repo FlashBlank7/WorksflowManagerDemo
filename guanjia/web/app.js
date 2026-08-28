@@ -220,6 +220,24 @@ async function send(){const t=$('chat-input').value.trim();if(!t||S.sending)retu
     catch(e2){cur().text='远端出错：'+e2.message;renderChat(false)}}
   S.sending=false;$('send-btn').disabled=false;const ci=$('chat-input');ci&&ci.focus()}
 
+async function showArchived(){
+  // 收起来的必须看得见——不然用户不敢按第一下
+  let data;
+  try{data=await api('/api/workflow/archived')}
+  catch(e){alert('查不到已收起的：'+e.message);return}
+  if(data.unsupported){alert('这个后端还不支持归档（版本较旧）');return}
+  const items=data.items||[];
+  if(!items.length){alert('没有收起来的东西。');return}
+  const lines=items.slice(0,15).map((i,n)=>(n+1)+'. '+i.name).join('\n');
+  const more=items.length>15?('\n…还有 '+(items.length-15)+' 个'):'';
+  const answer=prompt('已收起 '+items.length+' 个：\n\n'+lines+more+
+    '\n\n要拿回哪个？填序号（1-'+Math.min(15,items.length)+'），或直接关掉。','');
+  if(!answer)return;
+  const index=parseInt(answer,10)-1;
+  if(!(index>=0&&index<Math.min(15,items.length))){alert('序号不对');return}
+  try{await api('/api/workflow/archive',{app_id:items[index].id,archived:false});
+    alert('已放回：'+items[index].name);boot()}
+  catch(e){alert('放回失败：'+e.message)}}
 async function tidyWorkflows(){
   // 只给建议、由用户点头——跟对话里那条工具同一个规矩
   let data;
