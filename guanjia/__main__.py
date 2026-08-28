@@ -150,7 +150,13 @@ def main() -> None:
                 pr = use_profile(args[2])
                 print(f"已切到「{args[2]}」 {pr.get('server','')}")
             except KeyError:
-                print(f"没有档案「{args[2]}」")
+                # 只说"没有"不给出路。用户记错名字时最需要的就是那份清单。
+                from .config import list_profiles
+                _, profiles = list_profiles()      # 回的是 (当前档案, 全部档案)
+                names = sorted(profiles)
+                print(f"没有档案「{args[2]}」。"
+                      + (f"现有的：{'、'.join(names)}" if names
+                         else "一个档案都还没有——用 guanjia remote add <名字> 加一个"))
                 sys.exit(1)
         elif sub == "add" and len(args) > 2:
             from .cli import login_flow

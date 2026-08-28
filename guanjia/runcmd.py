@@ -313,15 +313,22 @@ def import_main(argv: list[str]) -> int:
     try:
         text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
         payload = json.loads(text)
-    except OSError as error:
-        print(f"读不了文件：{error}", file=sys.stderr)
+    except OSError:
+        # 原样印 OSError 就是 "[Errno 2] No such file or directory: '/x.json'"
+        print(f"读不了这个文件：{args.file}", file=sys.stderr)
+        print("路径写对了吗？快照要用 guanjia export 产出的 .guanjia.json",
+              file=sys.stderr)
         return 2
     except UnicodeDecodeError:
         print("文件不是 UTF-8 文本——快照要用 guanjia export 产出的 .guanjia.json",
               file=sys.stderr)
         return 2
     except json.JSONDecodeError as error:
-        print(f"不是合法 JSON：{error}", file=sys.stderr)
+        # json 的报错是 "Expecting value: line 1 column 1 (char 0)"——
+        # 位置有用，但那句英文对用户没有意义。
+        print(f"这个文件不是合法的 JSON（第 {error.lineno} 行第 {error.colno} 列读不下去）",
+              file=sys.stderr)
+        print("快照要用 guanjia export 产出的 .guanjia.json，别手改", file=sys.stderr)
         return 2
 
     cfg = load_config()
