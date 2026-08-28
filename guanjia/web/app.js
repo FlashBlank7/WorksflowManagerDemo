@@ -370,6 +370,17 @@ async function runWf(btn){const inputs={};let bad=false;
     catch(e){bad=true;el.classList.add('bad');   // 解析失败要看得见，不能静默丢键
       if(box)box.textContent='格式不对：'+e.message}});
   if(bad){$('run-result').innerHTML='<div class="result r-err">有输入格式不对，改好再跑</div>';return}
+  // 少了必填项就别发：远端会建一条运行记录、在 start 节点失败，
+  // 那条失败永久留在历史里，还会让体检以为工作流坏了
+  const missing=(S.schema||[]).filter(f=>f.required!==false
+    &&String(inputs[f.name]??'').trim()==='');
+  if(missing.length){
+    missing.forEach(f=>{const el=document.querySelector(`#run-form [data-k="${f.name}"]`);
+      if(el)el.classList.add('bad');
+      const box=el&&el.parentElement.querySelector('.field-err');
+      if(box)box.textContent='这项必填'});
+    $('run-result').innerHTML='<div class="result r-err">还缺必填输入：'
+      +missing.map(f=>esc(f.label||f.name)).join('、')+'</div>';return}
   btn.disabled=true;
   const box=$('run-result');box.innerHTML='<div class="result r-ok">远端运行中…</div>';
   try{const r=await api('/api/workflow/run',{app_id:S.current.id,inputs});

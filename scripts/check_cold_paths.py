@@ -20,6 +20,41 @@ GREEN, RED, DIM, RESET = "\x1b[32m", "\x1b[31m", "\x1b[2m", "\x1b[0m"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def check_web_assets(cold: "Cold") -> None:
+    """网页壳的 JS 语法。有 node/deno/bun 就真检查，没有就明说跳过。
+
+    这些文件不被 import 也不被执行，语法错误只有用户打开网页才看得见。
+    零依赖是底线，所以不强求装 node；但"没检查"必须说出来，
+    不能让一片绿掩盖住"其实没验"。
+    """
+    import shutil
+
+    engine = next((name for name in ("node", "deno", "bun")
+                   if shutil.which(name)), None)
+    targets = [os.path.join(ROOT, "guanjia", "web", "app.js")]
+    if engine is None:
+        print(f"  {DIM}· 网页壳 JS 语法：跳过（本机没有 node/deno/bun）"
+              f"{RESET}")
+        return
+    for path in targets:
+        name = f"网页壳 JS 语法（{engine}）"
+        args = [engine, "check" if engine == "deno" else "--check", path]
+        if engine == "bun":
+            args = [engine, "build", "--no-bundle", path]
+        try:
+            done = subprocess.run(args, capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            cold.failures.append(f"{name}: 跑不起来（{error}）")
+            print(f"  {RED}✕{RESET} {name}  {DIM}跑不起来{RESET}")
+            continue
+        if done.returncode == 0:
+            print(f"  {GREEN}✓{RESET} {name}")
+        else:
+            detail = (done.stderr or done.stdout).strip().splitlines()
+            cold.failures.append(f"{name}: {detail[0] if detail else '语法错误'}")
+            print(f"  {RED}✕{RESET} {name}  {DIM}{detail[0] if detail else ''}{RESET}")
+
+
 class Cold:
     def __init__(self) -> None:
         self.failures: list[str] = []
@@ -158,6 +193,8 @@ def main() -> int:
         cold.run("run 参数没有等号", ["run", "x", "没有等号"], env=blank)
         cold.run("import 不存在的文件", ["import", "/nope.json"], env=blank)
         cold.run("import 从 stdin 读到空", ["import", "-"], env=blank)
+
+    check_web_assets(cold)
 
     print()
     if cold.failures:
