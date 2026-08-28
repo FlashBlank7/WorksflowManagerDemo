@@ -270,7 +270,11 @@ function renderList(){const q=($('wf-search').value||'').toLowerCase();
     </div>`).join('')||'<div class="empty">没有匹配的工作流</div>'}
 async function archiveOne(id,name,ev){ev.stopPropagation();
   if(!confirm('把「'+name+'」从列表收起来？数据不会删，之后能拿回来。'))return;
-  try{await api('/api/workflow/archive',{app_id:id,archived:true});boot()}
+  try{const r=await api('/api/workflow/archive',{app_id:id,archived:true});
+    // 带定时的工作流收起来会连定时一起停——这是隐式副作用，收完必须说
+    if(r.was_scheduled)alert('已收起「'+name+'」。注意：它的定时也一并停了，'+
+      '放回列表就会恢复。');
+    boot()}
   catch(e){alert('收起失败：'+e.message)}}
 async function openWf(id){S.current=S.workflows.find(w=>w.id===id);renderList();
   let schema=[];try{schema=await api('/api/workflow/inputs/'+id)}catch(e){}
