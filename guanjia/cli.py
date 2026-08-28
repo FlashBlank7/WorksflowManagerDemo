@@ -82,6 +82,27 @@ _MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
 _MD_CODE = re.compile(r"`([^`]+)`")
 
 
+def stream_chunk(pending: str, chunk: str) -> tuple[str, str]:
+    """吃进一个流式分片，回 (现在能打印的文本, 还要攒着的尾巴)。
+
+    单独拎出来是为了能测：这段逻辑原本长在 REPL 那个大函数里，
+    接线自查时发现「把 render_md 换成直接 print，测试照样全绿」——
+    判据有人守，接线没人守。
+
+    有 markdown 标记或上下文标记的尾巴要攒到行尾再渲染，
+    否则半个 ** 或半个 <上下文 会先冒到屏幕上。
+    """
+    pending += chunk
+    out: list[str] = []
+    while "\n" in pending:
+        line, pending = pending.split("\n", 1)
+        out.append(render_md(line) + "\n")
+    if not ("*" in pending or "`" in pending or "<" in pending):
+        out.append(pending)
+        pending = ""
+    return "".join(out), pending
+
+
 def render_md(line: str) -> str:
     """把模型写的 markdown 渲染成终端能看的样子。
 
@@ -339,14 +360,9 @@ def main() -> None:
                     if not in_text:
                         print(f"{G}●{N} ", end="", flush=True)
                         in_text = True
-                    pending += event["text"]
-                    # 有 markdown 标记就攒到行尾再渲染；没有就照常一个字一个字冒
-                    while "\n" in pending:
-                        line, pending = pending.split("\n", 1)
-                        print(render_md(line))
-                    if not ("*" in pending or "`" in pending or "<" in pending):
-                        print(pending, end="", flush=True)
-                        pending = ""
+                    chunk, pending = stream_chunk(pending, event["text"])
+                    if chunk:
+                        print(chunk, end="", flush=True)
                     streamed = True
                 elif kind == "action":
                     if in_text:

@@ -8,7 +8,7 @@
 """
 import unittest
 
-from guanjia.cli import render_md
+from guanjia.cli import render_md, stream_chunk
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -47,3 +47,44 @@ class RenderMarkdownTest(unittest.TestCase):
     def test_unclosed_marker_is_left_alone(self):
         # 模型写了半截，不能把后面整行都当成加粗吞掉
         self.assertEqual(render_md("**没有收尾"), "**没有收尾")
+
+
+class StreamChunkTest(unittest.TestCase):
+    """流式分片的接线：判据有人守不代表接线有人守。
+
+    这一组的由来是接线自查——把 REPL 里的 render_md 换成直接 print，
+    只测 render_md 的用例照样全绿。逻辑因此从 REPL 里拎出来单独测。
+    """
+
+    def _feed(self, chunks):
+        pending, out = "", []
+        for chunk in chunks:
+            text, pending = stream_chunk(pending, chunk)
+            out.append(text)
+        return "".join(out), pending
+
+    def test_bold_split_across_chunks_is_rendered_not_leaked(self):
+        out, pending = self._feed(["- **行", "数**: 3\n"])
+        self.assertEqual(out, f"- {BOLD}行数{RESET}: 3\n")
+        self.assertEqual(pending, "")
+
+    def test_context_marker_split_across_chunks_is_filtered(self):
+        out, _ = self._feed(["<上下文 上一轮", '做了="x" />它不能发邮件\n'])
+        self.assertEqual(out, "它不能发邮件\n")
+
+    def test_plain_text_streams_immediately(self):
+        # 没有标记的正文要照常一个字一个字冒，不能全攒到行尾
+        out, pending = self._feed(["跑完", "了"])
+        self.assertEqual(out, "跑完了")
+        self.assertEqual(pending, "")
+
+    def test_a_pending_marker_holds_the_whole_line(self):
+        """出现标记后整行都攒着，不只攒带标记的那一截。
+
+        故意选的简单做法：只要尾巴里有 * ` <，整段就等到行尾再渲染。
+        代价是这一行少了点「逐字冒」的实时感；换来的是不会有半个 **
+        或半个 <上下文 抢先冒到屏幕上。绝大多数句子没有标记，不受影响。
+        """
+        out, pending = self._feed(["前面 **粗"])
+        self.assertEqual(out, "")
+        self.assertEqual(pending, "前面 **粗")

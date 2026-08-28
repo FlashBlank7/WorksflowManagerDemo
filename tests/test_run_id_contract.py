@@ -10,6 +10,7 @@ id 不是 run_id，`guanjia run` 直接 KeyError: 'run_id'，
 """
 import unittest
 
+from guanjia.plugins import workflow
 from guanjia.plugins.workflow import _run_id_of
 from guanjia.remote import RemoteError
 
@@ -42,3 +43,38 @@ class RunIdContractTest(unittest.TestCase):
         for payload in ({"run_id": ""}, {"run_id": "   "}, {"run_id": None}):
             with self.assertRaises(RemoteError):
                 _run_id_of(payload, "发起运行")
+
+
+class RunUsesTheHelperTest(unittest.TestCase):
+    """光有函数不够：run() 真调用它了吗？
+
+    这条的由来是接线自查——把 run() 里那句 _run_id_of 换回
+    created["run_id"]，只测函数的测试照样全绿，
+    而真机上撞到的正是那句 KeyError。
+    """
+
+    class _Remote:
+        def __init__(self, created):
+            self.created = created
+
+        def request(self, method, path, body=None):
+            if method == "POST":
+                return self.created
+            return {"status": "succeeded", "outputs": {}, "error": ""}
+
+    def test_missing_run_id_raises_a_readable_error_not_keyerror(self):
+        from guanjia.remote import RemoteError
+
+        with self.assertRaises(RemoteError) as caught:
+            workflow.run(self._Remote({"foo": 1}), "app-1", {}, wait_seconds=1)
+        self.assertIn("run_id", str(caught.exception))
+
+    def test_plain_id_still_runs(self):
+        result = workflow.run(self._Remote({"id": "r9"}), "app-1", {}, wait_seconds=5)
+        self.assertEqual(result["run_id"], "r9")
+
+    def test_start_run_uses_the_helper_too(self):
+        from guanjia.remote import RemoteError
+
+        with self.assertRaises(RemoteError):
+            workflow.start_run(self._Remote({"nope": 1}), "app-1", {})
