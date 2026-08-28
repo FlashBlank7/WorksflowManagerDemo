@@ -62,3 +62,23 @@ class RequiredInputsTest(unittest.TestCase):
         code, _, run = self._run([], schema=[])
         self.assertEqual(code, 0)
         run.assert_called_once()
+
+    def test_empty_name_says_what_to_type(self):
+        """空名字会被当成「匹配所有」，原本报「有歧义，匹配到多个「」」。
+
+        用户看了完全不知道自己做错了什么——他只是没打名字。
+        """
+        target = {"id": "a1", "name": "统计", "published": True}
+        err = io.StringIO()
+        with patch.object(runcmd.workflow, "list_workflows", return_value=[target]), \
+             patch.object(runcmd.workflow, "run") as run, \
+             patch.object(runcmd, "RemoteClient", MagicMock()), \
+             patch.object(runcmd, "load_config",
+                          return_value={"server": "s", "token": "t"}), \
+             redirect_stderr(err), redirect_stdout(io.StringIO()):
+            code = runcmd.main(["   ", "--json"])
+        text = err.getvalue()
+        self.assertEqual(code, 2)
+        self.assertIn("要给出工作流名字", text)
+        self.assertNotIn("有歧义", text)
+        run.assert_not_called()

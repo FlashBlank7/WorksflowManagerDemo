@@ -49,6 +49,13 @@ def main(argv: list[str]) -> int:
         print(f"{error}\n{next_step(error)}", file=sys.stderr)
         return 1
 
+    if not args.name.strip():
+        # 空名字会被当成「匹配所有」，报出「有歧义，匹配到多个「」」——
+        # 用户看了完全不知道自己做错了什么
+        print("要给出工作流名字，比如：guanjia run 词频统计 text=…", file=sys.stderr)
+        print("不记得名字就先看一眼：guanjia today", file=sys.stderr)
+        return 2
+
     target = _resolve(items, args.name)
     if isinstance(target, list):
         pool = target or items
