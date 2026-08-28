@@ -58,6 +58,11 @@ child.setwinsize(30, 100)
 child.logfile_read = sys.stdout.buffer
 
 child.expect("❯".encode("utf-8"))
+# 先开新对话：REPL 默认续上次会话，会照着旧上下文回答（录像里就出现过
+# 已经收起来的工作流），演示必须反映当下的真实状态
+type_out(child, "/new")
+child.sendline("")
+child.expect("❯".encode("utf-8"))
 for line in REPL_LINES:
     time.sleep(1.0)
     type_out(child, line)
