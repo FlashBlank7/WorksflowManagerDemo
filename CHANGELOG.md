@@ -142,7 +142,7 @@ HOME 只读或磁盘满时，招牌 REPL 此前会在回答刚出来之后崩掉
 - **Tab 补全**：`eval "$(guanjia completion bash)"`（zsh 同理）；`run` 后补
   工作流名、`remote use/rm` 后补档案名
 - **桌面壳**：`guanjia web --app` 独立窗口（chromium 系探测）/`--open`；
-  评估结论见 docs/desktop-shell.md——不引桌面依赖
+  评估结论见 docs/decisions/desktop-shell.md——不引桌面依赖
 - **顶层 `--help`**：完整命令地图
 - **回归测试套**：31 用例零依赖 unittest（config/sessions/doctor/run/completion/help），
   真 HTTP 桩覆盖成功/失效/不可达三态

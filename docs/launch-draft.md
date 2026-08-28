@@ -1,6 +1,6 @@
 # 首发材料草稿（Show HN / V2EX / 掘金）
 
-> 依据 docs/naming-and-distribution.md 的传播清单。发布时机：GitHub 仓库公开后。
+> 依据 docs/decisions/naming-and-distribution.md 的传播清单。发布时机：GitHub 仓库公开后。
 > 最后对齐：0.6.1（2026-08-28）。**帖子里的每个数字都必须是当时跑出来的真实值**，
 > 不要抄这里的旧数——它们是写稿时的真值，发布前重新测一遍再填。
 

@@ -195,3 +195,41 @@ class FirstRunTest(unittest.TestCase):
         self.assertIn("## 后端：它连的是什么", zh)
         self.assertIn("注册令牌", zh)
         self.assertIn("## The backend it talks to", en)
+
+
+class DocsLinkTest(unittest.TestCase):
+    """文档里的相对链接必须指向真实存在的文件。
+
+    最容易悄悄烂掉的东西：挪个文件、改个名，链接就死了而没人发现。
+    此前跨仓引用 ../Lilies/... 在仓库独立发布后会全部失效，
+    整理 docs 结构时又一次性造出 3 条死链——所以固化成测试。
+    """
+
+    def test_no_broken_relative_links(self):
+        import re
+        from pathlib import Path as _P
+
+        root = _P(__file__).resolve().parent.parent
+        docs = list(root.glob("*.md")) + list((root / "docs").rglob("*.md"))
+        broken = []
+        for md in docs:
+            for label, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)",
+                                            md.read_text(encoding="utf-8")):
+                if target.startswith(("http://", "https://", "#", "mailto:")):
+                    continue
+                if not (md.parent / target.split("#")[0]).resolve().exists():
+                    broken.append(f"{md.relative_to(root)}: [{label}]({target})")
+        self.assertEqual(broken, [], f"死链：{broken}")
+        self.assertGreater(len(docs), 5, "文档没扫到，检查本身失效了")
+
+    def test_no_cross_repo_references(self):
+        """引用另一个仓库的路径，发布后必然是死链。"""
+        from pathlib import Path as _P
+
+        root = _P(__file__).resolve().parent.parent
+        offenders = [
+            str(md.relative_to(root))
+            for md in list(root.glob("*.md")) + list((root / "docs").rglob("*.md"))
+            if "../Lilies" in md.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(offenders, [])
