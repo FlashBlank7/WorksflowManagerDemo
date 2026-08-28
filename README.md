@@ -106,7 +106,11 @@ guanjia 是**薄客户端**——不跑模型、不存业务数据。所有能�
 guanjia 显示更多信息；**没有这些接口的老后端会静默降级而不是报错**，
 详见[已知边界](docs/known-limits.md)。
 
-想自己实现后端、或想知道某块信息为什么不显示，跑 **`guanjia doctor --contract`**：
+想自己实现后端，`examples/minimal_backend.py` 是个能跑的骨架：
+零依赖单文件，内存里假装有两个工作流，`guanjia today` / `run` / `doctor --contract`
+都能对着它跑。每个处理函数上写着 guanjia 拿这块数据干什么、少了会怎样。
+
+想知道自己的后端缺什么、或某块信息为什么不显示，跑 **`guanjia doctor --contract`**：
 它逐个探测只读接口，报出缺了哪个、少了会怎样。有副作用的接口只列不探——
 自查工具不该在你的库里制造副作用，没验的它会明说没验。
 

@@ -153,9 +153,25 @@ def wait_for(remote: RemoteClient, run_id: str, wait_seconds: float = 45.0) -> d
     return {"run_id": run_id, "status": "running", "outputs": {}, "error": None, "by": ""}
 
 
+def _run_id_of(created: dict, where: str) -> str:
+    """从「建运行」的响应里取运行号，取不到就说人话。
+
+    写第一个第三方后端时撞到的：响应里给的是 id 不是 run_id，
+    客户端直接 KeyError: 'run_id'——一个栈回溯，既没说哪里不对，
+    也没说该怎么改。契约只列了有哪些接口，没说返回什么形状。
+    """
+    for key in ("run_id", "id"):
+        value = str((created or {}).get(key) or "").strip()
+        if value:
+            return value
+    raise RemoteError(0, f"{where}返回里没有运行号（run_id）。"
+                         f"后端这个接口要回 {{\"run_id\": \"…\"}}；"
+                         f"实际拿到的字段：{sorted((created or {}).keys()) or '（空响应）'}")
+
+
 def run(remote: RemoteClient, app_id: str, inputs: dict, wait_seconds: float = 45.0) -> dict:
     created = remote.request("POST", f"/api/v1/applications/{app_id}/runs", {"inputs": inputs})
-    run_id = created["run_id"]
+    run_id = _run_id_of(created, "发起运行")
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
         current = remote.request("GET", f"/api/v1/runs/{run_id}")
@@ -259,8 +275,9 @@ def find_run(remote: RemoteClient, prefix: str) -> str | None:
 
 def start_run(remote: RemoteClient, app_id: str, inputs: dict) -> str:
     """只创建不等待，返回 run_id（--follow 用）。"""
-    return remote.request("POST", f"/api/v1/applications/{app_id}/runs",
-                          {"inputs": inputs})["run_id"]
+    created = remote.request("POST", f"/api/v1/applications/{app_id}/runs",
+                             {"inputs": inputs})
+    return _run_id_of(created, "发起运行")
 
 
 TERMINAL_EVENTS = ("workflow.completed", "workflow.failed",
