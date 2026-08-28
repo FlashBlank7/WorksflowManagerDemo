@@ -98,12 +98,17 @@ async function loadHealth(){const box=$('ov-health');if(!box)return;
     const bad=(d.items||[]).filter(i=>i.state!=='ok');
     if(!bad.length){box.innerHTML='';return}
     const c=d.counts||{};
-    box.innerHTML='<div class="section-head"><h2>需要处理</h2>'+
-      '<span class="sub">坏 '+(c.broken||0)+' · 停 '+(c.stale||0)+'</span></div>'+
+    const parts=[];
+    if(c.broken)parts.push('坏 '+c.broken);
+    if(c.stale)parts.push('停 '+c.stale);
+    if(c.waiting)parts.push('等 '+c.waiting);
+    box.innerHTML='<div class="section-head"><h2>需要留意</h2>'+
+      '<span class="sub">'+parts.join(' · ')+'</span></div>'+
       '<div class="detail" style="margin-top:0;padding:6px 20px">'+bad.map(i=>
-        '<div class="hl-row '+(i.state==='broken'?'bad':'warn')+'" '+
+        '<div class="hl-row '+(i.state==='broken'?'bad':
+          (i.state==='waiting'?'wait':'warn'))+'" '+
         'onclick="gotoWf(\''+i.application_id+'\')" title="点开看这个工作流">'+
-        '<span class="hl-st">'+(i.state==='broken'?'✕':'⏸')+'</span>'+
+        '<span class="hl-st">'+({broken:'✕',stale:'⏸',waiting:'⋯'}[i.state]||'·')+'</span>'+
         '<span class="hl-nm">'+esc(i.workflow)+'</span>'+
         '<span class="hl-rs">'+esc(i.reason)+'</span>'+
         (i.overdue?'<span class="hl-tag">定时没开火</span>':'')+'</div>').join('')+'</div>'}

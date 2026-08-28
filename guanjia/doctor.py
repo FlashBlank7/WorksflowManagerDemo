@@ -94,8 +94,11 @@ def run() -> int:
             if not bad:
                 print(f"{OK} 工作流健康：{counts.get('ok', 0)} 个已发布工作流都正常")
             else:
-                print(f"{WARN} 工作流健康：{len(bad)} 个要看看"
-                      f"（坏 {counts.get('broken', 0)} · 停 {counts.get('stale', 0)}）")
+                summary = " · ".join(
+                    f"{label} {counts[key]}"
+                    for key, label in (("broken", "坏"), ("stale", "停"), ("waiting", "等"))
+                    if counts.get(key))
+                print(f"{WARN} 工作流健康：{len(bad)} 个要看看（{summary}）")
                 for item in bad[:5]:
                     print(f"    · {item['workflow']}：{item['reason']}")
                 # 两种状态是两回事，别给同一条建议：
@@ -103,6 +106,9 @@ def run() -> int:
                 if any(item.get("state") == "broken" for item in bad):
                     problems.append("跑不通的那几个：在对话里说「<名字> 坏了帮我修」，"
                                     "构建智能体会在原工作流上改")
+                if any(item.get("state") == "waiting" for item in bad):
+                    # 还在跑不是问题，说一句免得用户以为要动手
+                    print("    （「等」的那些还在跑或等人工确认，不用管）")
                 if any(item.get("state") == "stale" for item in bad):
                     # 「去看看调度器还在不在」是句没法落地的建议——直接查给用户看
                     sched = _scheduler_health(cfg)

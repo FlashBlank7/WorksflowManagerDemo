@@ -1,9 +1,27 @@
 :root{
-  --bg:#f5f7fa;--panel:#ffffff;--ink:#141a22;--sub:#5c6675;--faint:#98a1af;
-  --line:#e6e9ef;--line-soft:#eef1f5;
-  --accent:#0e7a5f;--accent-deep:#0a5c48;--accent-soft:#e7f4ef;--accent-line:#bfe3d5;
-  --warn:#8a5a00;--warn-bg:#fff6e3;--err:#b42318;--err-bg:#fdf1f0;
-  --radius:14px;--shadow:0 1px 2px rgba(20,26,34,.05),0 6px 24px rgba(20,26,34,.06);
+  /* 墨与纸：品牌不占颜色，颜色留给状态。
+     多数面板用满屏品牌色，于是"这块是绿的"既可能是品牌也可能是"正常"——
+     分不清的颜色等于没有信息。这里反过来：界面是灰阶，
+     一见到饱和色就一定在说某件事的状态。 */
+  --bg:#f7f6f4;          /* 纸：暖一点的灰白，不是冷 SaaS 蓝灰 */
+  --panel:#ffffff;
+  --ink:#1c1f26;         /* 墨 */
+  --sub:#5f636e;
+  --faint:#9aa0ab;
+  --line:#e4e2de;--line-soft:#efedea;
+
+  /* 品牌 = 墨本身。强调靠字重与留白，不靠颜色 */
+  --accent:#2f333c;--accent-deep:#14171d;
+  --accent-soft:#eeece8;--accent-line:#d6d3cd;
+
+  /* 状态色：界面上仅有的饱和色 */
+  --ok:#1f7a4d;--ok-bg:#e8f3ec;
+  --warn:#8a5a00;--warn-bg:#fdf3e0;
+  --err:#b42318;--err-bg:#fdf1f0;
+
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --radius:10px;         /* 比之前方一点：工具感，不是消费品 */
+  --shadow:0 1px 2px rgba(28,31,38,.04),0 4px 16px rgba(28,31,38,.05);
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -87,7 +105,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:0 1px 2px rgba(20,26,34,.03)}
 .stat .num{font-size:26px;font-weight:700;letter-spacing:-.02em}
 .stat .lbl{font-size:12px;color:var(--sub);margin-top:2px}
-.stat.good .num{color:var(--accent)}.stat.bad .num{color:var(--err)}
+.stat.good .num{color:var(--ok)}.stat.bad .num{color:var(--err)}
 .line-item{display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
 .line-item:last-child{border:0}
 .line-item b{font-weight:600}
@@ -148,7 +166,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .run-row{display:flex;gap:12px;align-items:center;margin-top:14px}
 .run-row .note{font-size:12px;color:var(--faint)}
 .result{border-radius:11px;padding:14px 16px;margin-top:14px;border:1px solid;font-size:13px}
-.r-ok{background:#f6fbf9;border-color:var(--accent-line)}
+.r-ok{background:var(--ok-bg);border-color:#bcdcc8}
 .r-err{background:var(--err-bg);border-color:#f0b4ae}
 .kv{display:flex;gap:12px;padding:5px 0;border-bottom:1px dashed var(--line)}
 .kv:last-child{border:0}
@@ -186,7 +204,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
   font-size:12.5px;border:1px solid transparent}
 .h-row:nth-child(even){background:var(--bg)}
 .h-st{width:14px;text-align:center}
-.h-row.ok .h-st{color:var(--accent)}
+.h-row.ok .h-st{color:var(--ok)}
 .h-row.bad .h-st{color:var(--err)}
 .h-row.warn .h-st{color:var(--warn)}
 .h-at{color:var(--sub);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -213,7 +231,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .week .bars{display:flex;gap:10px;align-items:flex-end}
 .week .bar{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
   width:26px;min-height:52px}
-.week .b-ok{width:14px;background:var(--accent);border-radius:2px 2px 0 0}
+.week .b-ok{width:14px;background:var(--ok);border-radius:2px 2px 0 0}
 .week .b-bad{width:14px;background:var(--err);border-radius:2px 2px 0 0}
 .week .bar span{font-size:10px;color:var(--sub);margin-top:4px}
 
@@ -236,6 +254,8 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
 .hl-st{width:14px;text-align:center}
 .hl-row.bad .hl-st{color:var(--err)}
 .hl-row.warn .hl-st{color:var(--warn)}
+/* 等待中不是问题，只是还没有结论——用灰，别跟真故障抢注意力 */
+.hl-row.wait .hl-st{color:var(--faint)}
 .hl-nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
 .hl-rs{color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 
@@ -252,8 +272,19 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
   font-size:12.5px;color:var(--sub)}
 .pbar:empty{display:none}
 .pb-item{white-space:nowrap}
-.pb-item.ok{color:var(--accent)}
+.pb-item.ok{color:var(--ok)}
 .pb-item.bad{color:var(--err);font-weight:600}
 .pb-hint{color:var(--sub);font-size:12px}
 
 .h-by{color:var(--sub);font-size:11.5px;white-space:nowrap}
+
+/* ── 排印：数据等宽、正文比例字 ─────────────────────────────
+   终端出身的工具，数字与标识符对齐比"好看"更要紧 */
+.h-at,.ev-at,.ev-ty,.stat .num,.hl-tag,code,pre,textarea[data-json]{
+  font-family:var(--mono);font-variant-numeric:tabular-nums}
+.stat .num{letter-spacing:-.02em}
+
+/* ── 标识：用 REPL 的提示符，两张脸一眼同源 ───────────────── */
+.logo i{font-family:var(--mono);font-style:normal;font-weight:600;
+  color:var(--accent);opacity:.9}
+.logo b{letter-spacing:.02em}
