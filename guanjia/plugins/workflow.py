@@ -101,7 +101,9 @@ def input_schema(remote: RemoteClient, app_id: str) -> list[dict]:
         if node.get("type") == "start":
             return [
                 {"name": i["name"], "label": i.get("label") or i["name"],
-                 "type": i.get("type") or "string", "example": i.get("example", "")}
+                 "type": i.get("type") or "string", "example": i.get("example", ""),
+                 # 缺了必填项就别发请求——服务端会建一条注定失败的运行记录
+                 "required": bool(i.get("required", True))}
                 for i in (node.get("config") or {}).get("inputs") or []
             ]
     return []

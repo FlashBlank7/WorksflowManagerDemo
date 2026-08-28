@@ -98,6 +98,23 @@ def main(argv: list[str]) -> int:
                 print(f"输入 {field['name']} 不对：{error}", file=sys.stderr)
                 return 2
 
+    missing = [field for field in schema
+               if field.get("required", True)
+               and str(inputs.get(field["name"], "")).strip() == ""]
+    if missing:
+        # 别发这个请求：服务端会建一条运行记录、在 start 节点失败，
+        # 那条失败永久留在历史里，还会让体检以为工作流坏了。
+        names = "、".join(field["name"] for field in missing)
+        print(f"还缺必填输入：{names}", file=sys.stderr)
+        for field in missing:
+            example = field.get("example")
+            hint = f"，例如 {json.dumps(example, ensure_ascii=False)[:40]}" if example else ""
+            print(f"  {field['name']}（{field.get('type') or 'string'}）"
+                  f"{hint}", file=sys.stderr)
+        print(f"照这样补上：guanjia run {target['name']} "
+              + " ".join(f"{field['name']}=…" for field in missing), file=sys.stderr)
+        return 2
+
     if args.follow:
         return _follow(remote, target, inputs)
 
