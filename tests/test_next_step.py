@@ -23,7 +23,11 @@ class NextStepTest(unittest.TestCase):
         self.assertIn("连不上", text)
 
     def test_real_status_codes_are_still_shown(self):
-        self.assertIn("remote 401", str(RemoteError(401, "invalid API token")))
+        # 2026-08-29 前缀从 "remote 401: " 换成了「后端返回 401：」——
+        # 这条测试要保的是"码还看得见"，不是那串英文写法本身。
+        message = str(RemoteError(401, "invalid API token"))
+        self.assertIn("401", message)
+        self.assertNotIn("remote", message)
 
     def test_expired_session_says_log_in_not_deploy(self):
         for status in (401, 403):

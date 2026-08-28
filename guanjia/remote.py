@@ -8,12 +8,41 @@ import urllib.request
 from typing import Any
 
 
+def _readable(body: str) -> str:
+    """后端回的正文里，把给人看的那句取出来。
+
+    FastAPI 的错误正文是 {"detail": "..."}。原先整串 JSON 直接印给用户：
+
+        remote 500: {"detail":"internal boom"}
+
+    平台那边客户端会打到的报错今天已经全部中文化了，
+    这里把 detail 取出来，用户看到的就是那句中文，而不是一坨 JSON。
+    """
+    stripped = body.strip()
+    if not (stripped.startswith("{") and "detail" in stripped):
+        return body
+    try:
+        payload = json.loads(stripped)
+    except (json.JSONDecodeError, ValueError):
+        return body
+    detail = payload.get("detail") if isinstance(payload, dict) else None
+    if isinstance(detail, str) and detail.strip():
+        return detail.strip()
+    return body
+
+
 class RemoteError(RuntimeError):
     def __init__(self, status: int, detail: str):
         # status 0 是"压根没收到 HTTP 响应"的内部记号，不是状态码。
         # 印成 "remote 0:" 只会让人以为是个错误代码去搜。
-        prefix = f"remote {status}: " if status else ""
-        super().__init__(f"{prefix}{detail[:200]}")
+        #
+        # 200 同理：正文不是 JSON 时也走这里，而"remote 200"看着像成功，
+        # 只会让人更糊涂——那一支的 detail 已经把话说清楚了，不用前缀。
+        #
+        # 其余状态码留着，但换成中文：出问题时它是有用的线索，
+        # 只是不该以 "remote 500:" 这种开发者写法出现在用户面前。
+        prefix = f"后端返回 {status}：" if status and status != 200 else ""
+        super().__init__(f"{prefix}{_readable(detail)[:200]}")
         self.status = status
 
 
