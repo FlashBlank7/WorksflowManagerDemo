@@ -487,3 +487,42 @@ class RemoteHintTest(unittest.TestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+    def test_non_ascii_key_is_rejected_not_reset(self):
+        """compare_digest 对非 ASCII 字符串抛 TypeError——它在鉴权路径上，
+        抛出去就是连接被重置（curl 52），而不是干净的 401。"""
+        status, _, _ = self._raw("/?k=%E4%B8%AD%E6%96%87")
+        self.assertEqual(status, 401)
+
+    def test_non_ascii_cookie_is_rejected_not_reset(self):
+        status, _, _ = self._raw("/", headers={"Cookie": 'guanjia_key="中文"'})
+        self.assertEqual(status, 401)
+
+
+class WebStartupTest(unittest.TestCase):
+    """启动路径：先能服务再印地址，别让人看着一个能点的链接后面跟着栈。"""
+
+    def test_ipv6_needs_its_own_address_family(self):
+        """ThreadingHTTPServer 默认只认 IPv4，而 --host 白名单里写着 ::1。"""
+        import socket
+
+        server = shell._make_server("::1", 0)
+        try:
+            self.assertEqual(server.address_family, socket.AF_INET6)
+        finally:
+            server.server_close()
+        server = shell._make_server("127.0.0.1", 0)
+        try:
+            self.assertEqual(server.address_family, socket.AF_INET)
+        finally:
+            server.server_close()
+
+    def test_bind_failure_raises_before_anything_is_printed(self):
+        """端口被占时 _make_server 抛 OSError，调用方据此在印地址前退出。"""
+        taken = shell._make_server("127.0.0.1", 0)
+        try:
+            port = taken.server_address[1]
+            with self.assertRaises(OSError):
+                shell._make_server("127.0.0.1", port)
+        finally:
+            taken.server_close()

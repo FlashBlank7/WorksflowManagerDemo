@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -93,9 +94,19 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _key_ok(self) -> bool:
-        """非回环绑定时校验访问密钥：URL 上带 ?k=，之后靠 Cookie 记住。"""
+        """非回环绑定时校验访问密钥：URL 上带 ?k=，之后靠 Cookie 记住。
+
+        这个函数在鉴权路径上——任何意外都必须变成"不通过"，
+        而不是异常逃逸导致连接重置（那样客户端只看到 curl 52 号错误）。
+        """
         if not Handler.access_key:
             return True
+        try:
+            return self._check_key()
+        except Exception:  # noqa: BLE001 - 鉴权出意外一律判不通过
+            return False
+
+    def _check_key(self) -> bool:
         from http.cookies import SimpleCookie
         from urllib.parse import parse_qs, urlparse
 
@@ -112,7 +123,10 @@ class Handler(BaseHTTPRequestHandler):
                 given = ""
         import hmac
 
-        return hmac.compare_digest(given, Handler.access_key)
+        # 按字节比：compare_digest 对非 ASCII 字符串直接抛 TypeError，
+        # 而它在鉴权路径上——抛出去就是连接被重置，而不是干净的 401
+        return hmac.compare_digest(given.encode("utf-8"),
+                                   Handler.access_key.encode("utf-8"))
 
     def _deny(self) -> None:
         body = ("访问密钥不对。启动 guanjia web 的那台机器上，"
@@ -290,6 +304,19 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": str(error)}, 500)
 
 
+def _make_server(host: str, port: int) -> ThreadingHTTPServer:
+    """按地址族建服务：ThreadingHTTPServer 默认只认 IPv4，
+    而 --host 的白名单里写着 ::1——不选族的话那个值必然崩。"""
+    import socket
+
+    if ":" in host:
+        class _V6(ThreadingHTTPServer):
+            address_family = socket.AF_INET6
+
+        return _V6((host, port), Handler)
+    return ThreadingHTTPServer((host, port), Handler)
+
+
 def _remote_hint(port: int) -> list[str]:
     """在远程机器上跑时，印出本机该敲的转发命令。
 
@@ -347,24 +374,46 @@ def main() -> None:
         Handler.remote = RemoteClient(cfg["server"], cfg["token"])
     host = args.host.strip() or "127.0.0.1"
     loopback = host in ("127.0.0.1", "localhost", "::1")
+
+    # 先把服务起起来再印任何东西——此前是"先印地址、再 bind 失败"，
+    # 用户看到一个能点的地址后面跟着一段栈，还以为服务在跑
+    try:
+        server = _make_server(host, args.port)
+    except OSError as error:
+        print(f"起不来：{host}:{args.port} 绑定失败 —— {error}", file=sys.stderr)
+        import errno as _errno
+
+        if getattr(error, "errno", None) == _errno.EADDRINUSE:
+            print(f"  换个端口：guanjia web --port {args.port + 1}", file=sys.stderr)
+            print("  或先关掉已经在跑的那个 guanjia web", file=sys.stderr)
+        sys.exit(1)
+    except Exception as error:  # noqa: BLE001 - gaierror 等地址解析问题
+        print(f"起不来：地址 {host} 解析不了 —— {error}", file=sys.stderr)
+        sys.exit(1)
+
     if not loopback:
         import secrets
 
         Handler.access_key = secrets.token_urlsafe(12)
     shown_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-    url = f"http://{shown_host}:{args.port}"
+    # IPv6 地址在 URL 里要加方括号，否则拼出来的是不可粘贴的 http://::1:7800
+    shown = f"[{shown_host}]" if ":" in shown_host else shown_host
+    url = f"http://{shown}:{args.port}"
     if Handler.access_key:
         url += f"/?k={Handler.access_key}"
 
-    if args.open or args.app:
-        threading.Timer(0.6, _launch, args=(url, args.app)).start()
     print(f"guanjia: {url}")
     if not loopback:
         print("  ⚠ 已对外开放：网页壳没有登录，凭这个地址就能用你的平台账号。")
         print("    密钥只在这次启动有效；换成 SSH 端口转发更稳妥。")
     for line in _remote_hint(args.port):
         print(line)
-    ThreadingHTTPServer((host, args.port), Handler).serve_forever()
+    if args.open or args.app:
+        # bind 成功之后再拉浏览器：否则崩了也会把用户送到一个死地址
+        timer = threading.Timer(0.6, _launch, args=(url, args.app))
+        timer.daemon = True
+        timer.start()
+    server.serve_forever()
 
 
 
