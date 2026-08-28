@@ -8,7 +8,10 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.scripts]
-guanjia = "guanjia.__main__:main"
+# 指向 _run_cli 而不是 main：兜底在 _run_cli 里。
+# 指错的话，`python -m guanjia` 有兜底而装出来的 `guanjia` 命令没有——
+# 而用户用的正是后者。
+guanjia = "guanjia.__main__:_run_cli"
 
 [build-system]
 requires = ["hatchling"]

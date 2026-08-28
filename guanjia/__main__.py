@@ -162,5 +162,33 @@ def main() -> None:
     cli_main()
 
 
+def _run_cli() -> None:
+    """入口的最后一道兜底：任何没接住的异常都不该以栈回溯见用户。
+
+    2026-08-29 实测：让后端回一个形状不对的 200（比如 {}），
+    `guanjia today` 当场抛 KeyError: 'runs_today' 加一整屏回溯。
+    客户端里对远端返回值的直取下标有 224 处，逐个改 .get() 既大又会
+    把真实信号一起吞掉——所以在边界上兜一次，一个地方盖住全部。
+
+    分三类说话，因为用户要做的事不一样：
+      · 缺字段 / 类型不对 → 后端形状不对，去 doctor --contract 自查
+      · Ctrl-C            → 他自己按的，安静退出
+      · 其余              → 说清楚是意料之外，并给出自查入口
+    """
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        sys.exit(130)
+    except (KeyError, IndexError, TypeError, AttributeError) as error:
+        print(f"后端返回的数据和 guanjia 预期的形状对不上（{type(error).__name__}: {error}）。\n"
+              f"用 guanjia doctor --contract 看是哪个接口缺了什么。")
+        sys.exit(1)
+    except Exception as error:  # noqa: BLE001 - 兜底就是要接住一切
+        print(f"出了意料之外的问题：{error}\n"
+              f"哪里不对可以自查：guanjia doctor")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
-    main()
+    _run_cli()
