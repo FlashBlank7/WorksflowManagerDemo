@@ -13,7 +13,7 @@ import sys
 
 from .config import load_config
 from .plugins import workflow
-from .remote import RemoteClient, RemoteError
+from .remote import RemoteClient, RemoteError, next_step
 
 MARKS = {"succeeded": "✓", "failed": "✕", "cancelled": "⊘", "paused": "⏸",
          "running": "…", "queued": "⋯"}
@@ -46,7 +46,7 @@ def main(argv: list[str]) -> int:
     try:
         items = workflow.list_workflows(remote)
     except RemoteError as error:
-        print(f"远端不可达或登录失效：{error}（guanjia doctor 可自查）", file=sys.stderr)
+        print(f"{error}\n{next_step(error)}", file=sys.stderr)
         return 1
 
     target = _resolve(items, args.name)
@@ -199,7 +199,7 @@ def rerun_main(argv: list[str]) -> int:
             run_id = full
         result = workflow.rerun(remote, run_id, wait_seconds=args.wait)
     except RemoteError as error:
-        print(f"远端错误：{error}", file=sys.stderr)
+        print(f"{error}\n{next_step(error)}", file=sys.stderr)
         return 1
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
@@ -230,7 +230,7 @@ def export_main(argv: list[str]) -> int:
     try:
         target = _resolve(workflow.list_workflows(remote), args.name)
     except RemoteError as error:
-        print(f"远端不可达或登录失效：{error}", file=sys.stderr)
+        print(f"{error}\n{next_step(error)}", file=sys.stderr)
         return 1
     if isinstance(target, list):
         print(f"找不到唯一匹配「{args.name}」", file=sys.stderr)
@@ -238,7 +238,7 @@ def export_main(argv: list[str]) -> int:
     try:
         payload = workflow.export_snapshot(remote, target["id"])
     except RemoteError as error:
-        print(f"导出失败：{error}", file=sys.stderr)
+        print(f"导出失败：{error}\n{next_step(error)}", file=sys.stderr)
         return 1
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.out == "-":
@@ -291,7 +291,7 @@ def import_main(argv: list[str]) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except RemoteError as error:
-        print(f"导入失败：{error}", file=sys.stderr)
+        print(f"导入失败：{error}\n{next_step(error)}", file=sys.stderr)
         return 1
 
     state = "已发布" if result["published"] else "草稿（未发布）"

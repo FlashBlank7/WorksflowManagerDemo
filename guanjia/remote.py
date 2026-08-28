@@ -10,7 +10,10 @@ from typing import Any
 
 class RemoteError(RuntimeError):
     def __init__(self, status: int, detail: str):
-        super().__init__(f"remote {status}: {detail[:200]}")
+        # status 0 是"压根没收到 HTTP 响应"的内部记号，不是状态码。
+        # 印成 "remote 0:" 只会让人以为是个错误代码去搜。
+        prefix = f"remote {status}: " if status else ""
+        super().__init__(f"{prefix}{detail[:200]}")
         self.status = status
 
 
@@ -23,6 +26,26 @@ class RemoteUnreachable(RemoteError):
 
     def __init__(self, server: str, reason: object):
         super().__init__(0, f"连不上 {server}：{reason}")
+
+
+def next_step(error: RemoteError) -> str:
+    """把一个远端错误翻成"所以你该做什么"。
+
+    按原因分岔：连不上的人再怎么登录也没用，令牌过期的人不需要重新部署。
+    各入口共用这一份，省得措辞各写各的、还都不分原因。
+    """
+    if isinstance(error, RemoteUnreachable):
+        return ("连不上后端。guanjia 是薄客户端，得有一个工作流平台在跑：\n"
+                "  · 已经部署过：确认它启动了、地址端口没写错（guanjia remote）\n"
+                "  · 还没有后端：见项目主页「后端」一节\n"
+                "  · 想看完整自查：guanjia doctor")
+    if error.status in (401, 403):
+        return "登录态失效了，重新登录：guanjia --login"
+    if error.status == 404:
+        return "远端没有这个接口——多半是后端版本较旧，或地址指错了地方。"
+    if error.status >= 500:
+        return "后端自己出错了，稍后再试；持续如此就去看后端日志。"
+    return "哪里不对可以自查：guanjia doctor"
 
 
 def _lines(response, server: str):

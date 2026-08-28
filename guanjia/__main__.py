@@ -53,12 +53,12 @@ def main() -> None:
         return
     if args and args[0] == "today":
         from .config import load_config
-        from .remote import RemoteClient, RemoteError
+        from .remote import RemoteClient, RemoteError, next_step
         cfg = load_config()
         try:
             d = RemoteClient(cfg["server"], cfg["token"]).request("GET", "/api/v1/overview")
         except RemoteError as error:
-            print(f"远端不可达或未登录：{error}\n先运行 guanjia --login")
+            print(f"{error}\n{next_step(error)}")
             sys.exit(1)
         rt = d["runs_today"]
         running = rt.get("running", 0)
