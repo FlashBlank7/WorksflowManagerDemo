@@ -9,3 +9,4 @@
 | [desktop-shell.md](desktop-shell.md) | 不引桌面框架依赖，`web --app` 用 chromium 独立窗口 |
 | [failure-alerts.md](failure-alerts.md) | 失败告知走三层：离场 webhook / 在场通知 / 日报工作流；否决本地常驻轮询 |
 | [naming-and-distribution.md](naming-and-distribution.md) | 命名与分发渠道的选择 |
+| [required-input-check.md](required-input-check.md) | 必填输入在三条客户端出口各自拦；不动平台核心 create_run |
