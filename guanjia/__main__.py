@@ -81,6 +81,9 @@ def main() -> None:
                   + "  （✓全成 △有失败 ✕失败居多 ○未出结果 ·无运行）")
         for sch in d["schedules"]:
             print(f"  ⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}")
+        if d["recent_failures"]:
+            # 这一栏是「最近」不是「今天」——顶上写着今日运行，不说清楚会被当成今天的
+            print("  最近的失败：")
         for f in d["recent_failures"][:5]:
             print(f"  ✕ {f['workflow']} @{f['at']}  run {f['run_id']}  {f['error'][:60]}")
         if d["recent_failures"]:

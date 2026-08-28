@@ -289,6 +289,8 @@ def main() -> None:
                 for sch in d["schedules"]:
                     print(f"  {D}⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}"
                           f"（最近触发 {sch.get('last_fire_date') or '—'}）{N}")
+                if d["recent_failures"]:
+                    print(f"  {D}最近的失败：{N}")   # 不是今天的，别让上面那行带偏
                 for f in d["recent_failures"][:3]:
                     print(f"  {R}✕ {f['workflow']} @{f['at']} {f['error'][:50]}{N}")
             except RemoteError as error:
