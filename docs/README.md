@@ -5,6 +5,7 @@
 | 文档 | 回答什么问题 |
 | --- | --- |
 | [../README.md](../README.md) | 它是什么、能替我做什么、怎么装 |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | 想改代码：怎么跑起来、怎么验 |
 | [known-limits.md](known-limits.md) | **它现在做不到什么** —— 装之前值得先看 |
 | [alternatives.md](alternatives.md) | 和 aichat / n8n / windmill 有什么区别 |
 | [design.md](design.md) | 界面与语气的取舍（改 UI 前对照着来） |

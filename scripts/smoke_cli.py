@@ -20,7 +20,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-GREEN, RED, DIM, RESET = "\x1b[32m", "\x1b[31m", "\x1b[2m", "\x1b[0m"
+GREEN, RED, YELLOW, DIM, RESET = ("\x1b[32m", "\x1b[31m", "\x1b[33m",
+                                  "\x1b[2m", "\x1b[0m")
 
 
 def _outputs_match_remote(run_id: str, got: dict) -> bool:
@@ -94,7 +95,9 @@ def main() -> int:
     smoke.check("doctor 能自检", "配置" in out and "会话存储" in out,
                 f"退出码 {code}")
     if not logged_in:
-        print(f"\n{RED}未登录，后面的真机检查跳过：先 guanjia --login{RESET}")
+        # 不是失败，是环境不满足——别让人以为工具坏了
+        print(f"\n{YELLOW}⏭  没连后端，真机部分跳过（已跑完不需要后端的 3 项）{RESET}")
+        print(f"{DIM}   连上之后再来：guanjia --login，然后重跑这个脚本{RESET}")
         return 2
     smoke.check("doctor 报告工作流健康", "工作流健康" in out,
                 [line.strip() for line in out.splitlines() if "健康" in line][:1])

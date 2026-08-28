@@ -187,9 +187,12 @@ See [docs/alternatives.md](docs/alternatives.md) for detailed comparisons.
 ## 开发
 
 ```bash
-uv tool install --editable --from ~/code/bench guanjia   # 源码安装（可编辑）
-python3 -m guanjia                                       # 或直接跑
-python3 -m unittest discover tests                       # 回归测试（零依赖）
+python3 -m guanjia                    # 零依赖纯标准库，clone 下来就能跑
+python3 -m unittest discover tests    # 103 个测试，十几秒
+python3 scripts/check_cold_paths.py   # 冷门环境自检，22 项
 ```
+
+**没有后端也能改大部分东西**，上面两条检查照样全绿（用的是内置桩服务器）。
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 MIT License. · [English README](README.en.md) · [和近邻的详细对比](docs/alternatives.md) · [已知边界](docs/known-limits.md)
