@@ -1,5 +1,11 @@
 let S={messages:[],workflows:[],current:null,genBuild:null,onlyPub:true,user:null,sid:null,followTimer:null};
 const $=id=>document.getElementById(id);
+// 运行状态的中文说法。状态码是给机器看的——
+// 2026-08-29 之前结果框里直接印「状态 failed」。
+// 服务端同一天把状态码从各条出口都堵掉了，CLI 那边也改了，这里漏着。
+const RUN_WORDS={succeeded:'跑成了',failed:'没跑成',cancelled:'取消了',
+  paused:'停下等人填',running:'还在跑',queued:'排队中'};
+
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d}
 function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
   .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -389,7 +395,7 @@ async function runWf(btn){const inputs={};let bad=false;
   try{const r=await api('/api/workflow/run',{app_id:S.current.id,inputs});
     const rows=Object.entries(r.outputs||{}).map(([k,v])=>`<div class="kv"><b>${esc(k)}</b><span>${esc(typeof v==='object'?JSON.stringify(v,null,2):v)}</span></div>`).join('');
     box.innerHTML=r.status==='succeeded'?`<div class="result r-ok">${rows||'(无输出)'}</div>`
-      :`<div class="result r-err">状态 ${esc(r.status)}${r.error?'：'+esc(r.error):''}</div>`}
+      :`<div class="result r-err">${esc(RUN_WORDS[r.status]||'情况不明')}${r.error?'：'+esc(r.error):''}</div>`}
   catch(e){box.innerHTML=`<div class="result r-err">${esc(e.message)}</div>`}
   btn.disabled=false;if(S.current)loadHistory(S.current.id)}
 async function generate(){const req=$('gen-req').value.trim();

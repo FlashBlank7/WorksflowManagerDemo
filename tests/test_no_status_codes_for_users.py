@@ -82,3 +82,43 @@ class SourceHasNoRawStatusPrintTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WebShellStatusTest(unittest.TestCase):
+    """网页壳是第三个面，同一条规矩。
+
+    结果框原先直接印「状态 failed」。运行历史那边只有符号没有词，
+    所以之前没人注意到这一处。
+    """
+
+    @staticmethod
+    def _app_js() -> str:
+        from pathlib import Path
+
+        import guanjia
+
+        return (Path(guanjia.__file__).parent / "web" / "app.js").read_text(
+            encoding="utf-8")
+
+    def test_the_result_box_uses_chinese_words(self):
+        source = self._app_js()
+        self.assertIn("RUN_WORDS", source)
+        self.assertNotIn("状态 ${esc(r.status)}", source)
+
+    def test_the_web_map_covers_the_same_statuses_as_the_cli(self):
+        """两个面说同一件事，别一个有「取消了」另一个没有。"""
+        import re
+
+        source = self._app_js()
+        match = re.search(r"const RUN_WORDS=\{(.+?)\};", source, re.S)
+        self.assertIsNotNone(match, "找不到网页壳的状态对照表")
+        web = set(re.findall(r"(\w+):", match.group(1)))
+        self.assertEqual(web, set(WORDS), f"两边覆盖的状态不一致：{web ^ set(WORDS)}")
+
+    def test_the_two_maps_agree_on_the_wording(self):
+        """同一个状态在 CLI 和网页壳里不该有两种说法。"""
+        import re
+
+        match = re.search(r"const RUN_WORDS=\{(.+?)\};", self._app_js(), re.S)
+        web = dict(re.findall(r"(\w+):'([^']+)'", match.group(1)))
+        self.assertEqual(web, WORDS)
