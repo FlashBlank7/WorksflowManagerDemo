@@ -9,7 +9,7 @@
 git clone <repo> && cd guanjia
 python3 -m guanjia --version          # 零依赖纯标准库，不用装任何东西
 python3 -m unittest discover tests    # 全部测试，十几秒
-python3 scripts/check_cold_paths.py   # 冷门环境自检，22 项
+python3 scripts/check_cold_paths.py   # 冷门环境自检（含网页壳 JS 语法）
 ```
 
 两条都绿就说明环境没问题。**没有后端时这两条照样全绿**——
@@ -68,7 +68,7 @@ guanjia/
   web/            index.html / app.js / style.css（打包进 wheel）
 docs/             见 docs/README.md 索引
 scripts/          冒烟与自检脚本，每个文件头写着它为什么存在
-tests/            103 个测试，全部零依赖
+tests/            全部零依赖；数量不写死在这里，写死就会过期
 ```
 
 ## 报问题
