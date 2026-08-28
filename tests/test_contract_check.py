@@ -12,9 +12,9 @@ from unittest.mock import patch
 
 from guanjia.contract import READ_ENDPOINTS, run
 
-ALL_PATHS = [path for path, _, _ in READ_ENDPOINTS]
-REQUIRED = [path for path, required, _ in READ_ENDPOINTS if required]
-OPTIONAL = [path for path, required, _ in READ_ENDPOINTS if not required]
+ALL_PATHS = [row[0] for row in READ_ENDPOINTS]
+REQUIRED = [row[0] for row in READ_ENDPOINTS if row[1]]
+OPTIONAL = [row[0] for row in READ_ENDPOINTS if not row[1]]
 
 
 def _server(known: set[str]) -> tuple[HTTPServer, str]:
@@ -66,9 +66,9 @@ class ContractCheckTest(unittest.TestCase):
     def test_every_optional_gap_explains_what_is_lost(self):
         # 只说「缺了」没用，得说清少了会怎样
         _, text = self._run(REQUIRED)
-        for _, required, consequence in READ_ENDPOINTS:
-            if not required:
-                self.assertIn(consequence, text)
+        for row in READ_ENDPOINTS:
+            if not row[1]:
+                self.assertIn(row[2], text)
 
     def test_unreachable_backend_stops_early(self):
         out = StringIO()

@@ -22,16 +22,52 @@ WARN = "\x1b[33m!\x1b[0m"
 DIM = "\x1b[2m"
 NORM = "\x1b[0m"
 
-# (路径, 必需?, 少了会怎样)
+# (路径, 必需?, 少了会怎样, 响应里必须有的字段)
+#
+# 字段清单是从客户端**实际读取的地方**倒推来的，不是拍脑袋列的。
+# "a.b" 表示嵌套；"[].x" 表示「响应是数组，每个元素要有 x」。
 READ_ENDPOINTS = (
-    ("/api/v1/me", True, "认不出你是谁，登录态无从判断"),
-    ("/api/v1/applications", True, "列不出工作流——guanjia 基本没法用"),
-    ("/api/v1/overview", True, "today 统筹总览整块消失"),
-    ("/api/v1/health-report", False, "体检一节不显示"),
-    ("/api/v1/scheduler/health", False, "调度器死活显示为「未知（远端版本较旧）」"),
-    ("/api/v1/applications-archived", False, "看不了收起来的工作流"),
-    ("/api/v1/applications-archivable", False, "「收拾列表」给不出建议"),
+    ("/api/v1/me", True, "认不出你是谁，登录态无从判断",
+     ("user.name",)),
+    ("/api/v1/applications", True, "列不出工作流——guanjia 基本没法用",
+     ("[].id", "[].name")),
+    ("/api/v1/overview", True, "today 统筹总览整块消失",
+     ("runs_today.total", "runs_today.succeeded", "runs_today.failed",
+      "published_workflows", "builds_active", "schedules", "recent_failures")),
+    ("/api/v1/health-report", False, "体检一节不显示",
+     ("counts", "items")),
+    ("/api/v1/scheduler/health", False, "调度器死活显示为「未知（远端版本较旧）」",
+     ("alive", "seconds_since_tick")),
+    ("/api/v1/applications-archived", False, "看不了收起来的工作流", ()),
+    ("/api/v1/applications-archivable", False, "「收拾列表」给不出建议", ()),
 )
+
+
+def missing_fields(payload, required: tuple) -> list[str]:
+    """回「响应里少了哪些字段」。空表示形状没问题。
+
+    只查「有没有」，不查类型：类型错了后面自然会炸，
+    而漏字段是照着清单实现的人最容易犯、又最难自己发现的。
+    """
+    gaps = []
+    for path in required:
+        if path.startswith("[]."):
+            key = path[3:]
+            if not isinstance(payload, list):
+                gaps.append(f"{path}（响应本身应该是数组）")
+            elif payload and not isinstance(payload[0], dict):
+                gaps.append(f"{path}（数组元素应该是对象）")
+            elif payload and key not in payload[0]:
+                gaps.append(path)
+            continue
+        node = payload
+        for part in path.split("."):
+            if isinstance(node, dict) and part in node:
+                node = node[part]
+            else:
+                gaps.append(path)
+                break
+    return gaps
 
 # 有副作用，绝不自动探测；列出来是给实现方看的清单
 WRITE_ENDPOINTS = (
@@ -44,10 +80,14 @@ WRITE_ENDPOINTS = (
 )
 
 
-def _probe(client: RemoteClient, path: str) -> tuple[str, str]:
-    """回 (状态, 说明)。状态取 ok / missing / error / unreachable。"""
+def _probe(client: RemoteClient, path: str,
+           required: tuple = ()) -> tuple[str, str]:
+    """回 (状态, 说明)。状态取 ok / shape / missing / error / unreachable。"""
     try:
-        client.request("GET", path)
+        payload = client.request("GET", path)
+        gaps = missing_fields(payload, required)
+        if gaps:
+            return "shape", "少了字段：" + "、".join(gaps)
         return "ok", ""
     except RemoteUnreachable as error:
         return "unreachable", str(error)
@@ -69,14 +109,19 @@ def run(cfg: dict) -> int:
 
     missing_required: list[str] = []
     degraded: list[str] = []
-    for path, required, consequence in READ_ENDPOINTS:
-        state, note = _probe(client, path)
+    shape_gaps: list[str] = []
+    for path, required, consequence, fields in READ_ENDPOINTS:
+        state, note = _probe(client, path, fields)
         if state == "unreachable":
             print(f"{BAD} 连不上后端：{note}")
             return 1
         tail = f"  {DIM}{note}{NORM}" if note else ""
         if state == "ok":
             print(f"{OK} {path}{tail}")
+        elif state == "shape":
+            # 路由在，形状不对——照清单实现的人最容易栽在这里
+            shape_gaps.append(f"{path}：{note}")
+            print(f"{WARN} {path}  {DIM}{note}{NORM}")
         elif state == "missing":
             mark, bucket = (BAD, missing_required) if required else (WARN, degraded)
             bucket.append(path)
@@ -90,6 +135,12 @@ def run(cfg: dict) -> int:
         print(f"  {DIM}· {name}  {purpose}{NORM}")
 
     print()
+    if shape_gaps:
+        print(f"{WARN} {len(shape_gaps)} 个接口在，但响应缺字段——"
+              f"guanjia 读到一半会出错：")
+        for gap in shape_gaps:
+            print(f"  · {gap}")
+        print()
     if missing_required:
         print(f"{BAD} 缺 {len(missing_required)} 个必需接口：{'、'.join(missing_required)}")
         print("  guanjia 装不上这样的后端；先把它们实现了。")
