@@ -343,7 +343,12 @@ def main() -> None:
                 continue
         if final and not streamed:
             say(final)
-        history.append({"role": "assistant", "text": final})
+        # 带上动作痕迹：下一轮的「它」「那个」要靠它解析
+        history.append({"role": "assistant", "text": final,
+                        "actions": [{k: v for k, v in a.items()
+                                     if k in ("tool", "workflow", "name", "app_id",
+                                              "build_id", "summary")}
+                                    for a in actions][-4:]})
         if not sessions.save(sid, history):
             print(f"{D}（会话没能存到 {sessions.DIR}——这轮对话不会保留）{N}")
         for action in actions:
