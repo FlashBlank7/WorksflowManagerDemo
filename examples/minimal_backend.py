@@ -93,6 +93,17 @@ class Handler(BaseHTTPRequestHandler):
                  "requirement": a["requirement"], "active_version": a["active_version"]}
                 for a in APPS]),
 
+            # 单个工作流的详情。guanjia rerun 用它取当前名字——
+            # 缺了不会炸（那边包了 try/except），只是重跑时名字空着。
+            (r"^/api/v1/applications/([^/]+)$", "GET", lambda m, b: {
+                k: _app(m.group(1))[k]
+                for k in ("id", "name", "description", "requirement", "active_version")}),
+
+            # 历史版本清单。没有它就谈不上回滚。
+            (r"^/api/v1/applications/([^/]+)/versions$", "GET", lambda m, b: [
+                {"version": _app(m.group(1))["active_version"],
+                 "created_at": "2026-01-01T00:00:00+00:00"}]),
+
             # 发布版快照：run 的类型转换与必填校验都读这里
             (r"^/api/v1/applications/([^/]+)/draft$", "GET",
              lambda m, b: _snapshot(_app(m.group(1)))),
