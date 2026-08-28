@@ -7,7 +7,7 @@
 """
 import io
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import MagicMock, patch
 
 from guanjia import runcmd
@@ -32,7 +32,8 @@ class RequiredInputsTest(unittest.TestCase):
              patch.object(runcmd, "RemoteClient", MagicMock()), \
              patch.object(runcmd, "load_config",
                           return_value={"server": "s", "token": "t"}), \
-             redirect_stderr(err):
+             redirect_stderr(err), redirect_stdout(io.StringIO()):
+            # --json 的正常输出会糊在测试日志里，挡住真正该看的东西
             code = runcmd.main(["统计", *pairs, "--json"])
         return code, err.getvalue(), run
 
