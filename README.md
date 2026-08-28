@@ -1,7 +1,10 @@
 # guanjia（管家）
 
-> **终端里说人话，远端工厂替你造出能跑、有定时、可监控的工作流。**
+> **在终端里说人话，让它替你把工作流搭出来、并且一直跑下去。**
 > guanjia (管家) — your workflow butler in the terminal.
+
+用一句话描述要什么，得到的不是一段代码，而是**一个已经在跑的东西**：
+有版本、有定时、失败了会告诉你、坏了能在对话里修。
 
 ```text
 ❯ 每天早上8点生成服务器GPU状态日报
@@ -17,23 +20,38 @@
 
 *真实录屏：`doctor` 一眼看平台状况 → `today` 看今日与七日趋势 → 对话里问工作流、跑一个拿到真数据。重录：见 `scripts/record_demo.py` 文件头。*
 
+## 先说清楚：它需要一个后端
+
+guanjia 本身是**薄客户端**——不跑模型、不存业务数据，装上它并不会凭空多出
+一个工作流平台。所有能力来自一个你自己部署（或同事已经部署好）的后端。
+
+这个取舍换来的是：智能体循环与每次工具调用都在服务端并入审计台账，
+**客户端无法伪造结果**。代价也直说：没有托管版，先有后端才能开始。
+接口清单与获取方式见[后端一节](#后端它连的是什么)。
+
 ## 为什么是它
 
-对话式终端智能体（aichat/gptme/open-interpreter）只管改代码和操作电脑；
-工作流引擎的 CLI（n8n/windmill/temporal）只会 YAML 和同步部署。
-**"说人话 → 得到一个持续运行的工作流"这条线是空的**——guanjia 补的就是这个：
+对话式终端智能体（aichat / gptme / open-interpreter）只管改代码、操作电脑，
+执行完就结束；工作流引擎的 CLI（n8n / windmill / temporal）面向已经会写
+YAML 的工程师。**"说人话 → 得到一个持续运行的东西"这条线是空的。**
 
-- **生成**：自然语言需求 → 远端自动搭建、测试、发布（不是生成代码给你抄，是交付能跑的东西）
-- **统筹**：`guanjia today` 一眼今日运行/定时任务/失败聚合
-- **薄壳**：本地零依赖纯 Python，不跑模型、不存业务数据，一切能力来自你自托管的远端平台
+- **生成**：说需求 → 后端自动搭建、测试、发布。交付物是能跑的工作流，
+  不是一段让你自己去接的代码
+- **统筹**：`guanjia today` 一眼看今日运行、定时任务、失败聚合与七日趋势
+- **发现与修复**：体检点名坏掉或停摆的工作流并说清原因；
+  在对话里说一句「X 坏了帮我修」，它在原工作流上改而不是推倒重来
+- **薄壳**：纯标准库零依赖，本地不跑模型、不存业务数据
 
 ## 安装
 
 ```bash
 uv tool install guanjia    # 推荐
-uvx guanjia                # 不装直接试
 pipx install guanjia       # 或者
+uvx guanjia --version      # 只想看看装没装上
 ```
+
+装好之后直接敲 `guanjia`——**没有配过后端的话它会先告诉你需要什么**，
+而不是一上来问你要服务器地址。
 
 ## 使用
 
@@ -142,7 +160,7 @@ need in plain language, a server-side agent builds it on a self-hosted platform
 sample data — publishes it, and it keeps running.
 
 ```bash
-uv tool install guanjia    # or: uvx guanjia (try without installing)
+uv tool install guanjia    # or: pipx install guanjia
 guanjia                    # chat REPL — the signature feature
 guanjia today              # one-glance ops: today's runs, schedules, failures
 guanjia web                # local web shell (same account, streaming chat, dashboards)

@@ -1,7 +1,11 @@
 # guanjia (管家)
 
-> **Speak plainly in your terminal; a remote factory builds you a workflow that
-> actually runs — on schedule, with audit trails.**
+> **Say what you need in your terminal; get a workflow that actually runs —
+> on schedule, and keeps running.**
+
+You describe the need in one sentence. What comes back isn't code to wire up
+yourself — it's **something already running**: versioned, scheduled, and it
+tells you when it breaks.
 
 ```text
 ❯ generate a daily GPU status report at 8am
@@ -17,10 +21,20 @@
 
 *Real recording: `doctor` for platform status → `today` for runs and the 7-day trend → ask in chat, run a workflow, get real data.*
 
+## First, the catch: it needs a backend
+
+guanjia is a **thin client** — installing it does not conjure a workflow
+platform. Every capability comes from a backend you deploy yourself (or that a
+colleague already runs). What the trade buys: the agent loop and every tool call
+execute server-side and land in an audit ledger, so **the client cannot fake
+results**. What it costs: there is no hosted version — you need a backend first.
+See [the backend section](#the-backend-it-talks-to).
+
 ## Why
 
 Conversational terminal agents (aichat, gptme, open-interpreter) edit code and
-drive your computer; workflow engines' CLIs (n8n, windmill, temporal) sync YAML.
+drive your computer, then they're done; workflow engines' CLIs (n8n, windmill,
+temporal) target engineers who already write YAML.
 **The line from "plain language" to "a living, scheduled, monitored workflow"
 is empty** — guanjia fills it:
 
@@ -34,7 +48,8 @@ is empty** — guanjia fills it:
 
 ```bash
 uv tool install guanjia    # recommended
-uvx guanjia                # try without installing
+pipx install guanjia       # or this
+uvx guanjia --version      # just checking it installed
 pipx install guanjia       # alternative
 ```
 
