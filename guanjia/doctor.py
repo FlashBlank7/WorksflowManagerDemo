@@ -39,7 +39,13 @@ def run() -> int:
     else:
         print(f"{WARN} 配置：还没有档案，先用默认 {cfg['server']}")
     if not cfg["token"]:
-        problems.append("没有会话令牌 → guanjia --login 登录/注册")
+        if profiles:
+            problems.append("没有会话令牌 → guanjia --login 登录/注册")
+        else:
+            # 全新用户：他缺的不是令牌，是还不知道这工具要连什么
+            problems.append("还没连过后端：guanjia 是薄客户端，需要一个工作流平台。"
+                            "有地址和注册令牌就 guanjia --login；没有就先部署一个"
+                            "（见项目主页「后端」一节）")
 
     # 2 可达性 + 延迟（匿名探测：4xx/5xx 也证明服务器活着）
     anon = RemoteClient(cfg["server"], "", timeout=6.0)

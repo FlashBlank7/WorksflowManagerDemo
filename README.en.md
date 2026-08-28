@@ -62,6 +62,45 @@ eval "$(guanjia completion bash)"   # Tab completion (zsh works too)
   build tracking, dashboards, auto-rendered run forms, run timelines with
   artifact downloads
 
+## The backend it talks to
+
+guanjia is a **thin client** — it runs no model and stores no business data.
+Everything (builder agent, workflow runtime, scheduler, audit ledger, users)
+comes from a workflow backend you deploy yourself. That trade buys two things:
+complete audit trails, and a client that cannot fake results.
+
+The cost, stated plainly: **there is no hosted version; you need a backend first.**
+
+**Someone already running one?** Ask them for two things:
+
+```
+server address   (e.g. https://workflow.your-company.com)
+register token   (shared by the team, for self-service signup)
+```
+
+Then `guanjia --login` — pick your own username and password.
+**The first person to register becomes the admin.**
+
+**Rolling your own?** The backend needs to expose these HTTP endpoints
+(they are all guanjia depends on):
+
+| Purpose | Endpoints |
+| --- | --- |
+| Identity | `POST /api/v1/auth/register` · `POST /api/v1/auth/login` · `GET /api/v1/me` |
+| Chat | `POST /api/v1/assistant/agent` (plus `/stream` for SSE) |
+| Workflows | `GET /api/v1/applications` · `/{id}/draft` · `/{id}/runs` · `POST /{id}/runs` |
+| Builds | `POST /{id}/builds` · `GET /api/v1/builds/{id}` · `POST /{id}/resume` |
+| Ops | `GET /api/v1/overview` · `/api/v1/health-report` · `/api/v1/scheduler/health` |
+
+Backends that also serve `/health-report`, `/scheduler/health`, run artifacts and
+the bounded event list let guanjia show more; **older backends degrade silently
+rather than erroring out** — see [known limits](docs/known-limits.md).
+
+The reference implementation is a self-hosted FastAPI + SQLite platform
+(the builder agent drives DeepSeek or any OpenAI-compatible model, local vLLM
+included). Open an issue if you want a ready-made deployment — that part is
+being packaged for independent release.
+
 ## Finding what broke — and fixing it
 
 **Health check**: `guanjia doctor` names the workflows that are broken (all runs

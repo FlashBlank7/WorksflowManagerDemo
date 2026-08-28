@@ -143,3 +143,55 @@ class ColdPathGuardTest(unittest.TestCase):
         source = __import__("inspect").getsource(rc._follow)
         self.assertIn("workflow.wait_for", source)
         self.assertIn("except (RemoteError, OSError)", source)
+
+
+class FirstRunTest(unittest.TestCase):
+    """全新用户：不能一上来就问「服务器地址」——他还不知道这工具要连什么。"""
+
+    def test_guide_explains_before_asking(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from guanjia import cli
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), mock.patch("builtins.input", return_value="n"):
+            proceed = cli.first_run_guide("http://127.0.0.1:8000")
+        text = out.getvalue()
+        self.assertFalse(proceed)
+        self.assertIn("它需要一个后端", text)
+        self.assertIn("注册令牌", text)          # 告诉他要问同事要什么
+        self.assertIn("guanjia --login", text)   # 给出之后怎么回来
+
+    def test_guide_accepts_empty_enter_as_yes(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from guanjia import cli
+
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch("builtins.input", return_value=""):
+            self.assertTrue(cli.first_run_guide("http://x"))
+
+    def test_guide_survives_ctrl_c(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from guanjia import cli
+
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            self.assertFalse(cli.first_run_guide("http://x"))
+
+    def test_readme_has_the_section_the_guide_points_at(self):
+        """引导说「见项目主页的后端一节」——那一节必须真的存在，否则是空指路。"""
+        from pathlib import Path as _P
+
+        zh = _P("README.md").read_text(encoding="utf-8")
+        en = _P("README.en.md").read_text(encoding="utf-8")
+        self.assertIn("## 后端：它连的是什么", zh)
+        self.assertIn("注册令牌", zh)
+        self.assertIn("## The backend it talks to", en)

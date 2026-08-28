@@ -140,6 +140,31 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
         print(f"{D}已停止跟踪（构建仍在远端进行，/today 或直接问我进度）{N}")
 
 
+def first_run_guide(server_default: str) -> bool:
+    """从没配过的人：先讲清它要什么，再问要不要现在填。
+
+    返回 True 表示用户愿意继续登录，False 表示先退出去准备后端。
+    """
+    print(f"""{B}管家（guanjia）{N} —— 在终端里说人话，让远端把工作流搭出来并一直跑。
+
+{B}它需要一个后端。{N}本机只是壳：不跑模型、不存业务数据，
+所有能力来自你自己部署的工作流平台——这样审计才完整，客户端也无法伪造结果。
+
+{D}还没有后端？{N}
+  · 自己部署一个（见项目主页的「后端」一节），或
+  · 问已经在用的同事要：{B}服务器地址 + 注册令牌{N}，两样就够
+
+{D}已经有了？{N}下面填两行就能开始。也可以随时 Ctrl+C 退出，
+之后用 {B}guanjia --login{N} 再来。
+""")
+    try:
+        answer = input(f"  现在就填吗？[Y/n] ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return False
+    return answer in ("", "y", "yes", "是")
+
+
 def login_flow(server_default: str, profile: str | None = None) -> RemoteClient:
     print(f"{B}连接远端平台{N}")
     server = input(f"  服务器 [{server_default}]: ").strip() or server_default
@@ -177,6 +202,12 @@ def main() -> None:
         except RemoteError:
             remote = None   # 令牌失效才重新登录
     if remote is None:
+        _, profiles = list_profiles()
+        if not profiles and not args.login:
+            # 从没配过：先讲清楚它要什么，别一上来就问"服务器地址"
+            if not first_run_guide(cfg["server"]):
+                print(f"{D}准备好后端后，运行 guanjia --login 继续。{N}")
+                return
         try:
             remote = login_flow(cfg["server"])
         except (RemoteError, KeyboardInterrupt, EOFError) as error:

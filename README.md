@@ -57,6 +57,41 @@ guanjia export GPU日报 && guanjia import GPU日报.guanjia.json --name 副本 
 首次使用注册：管理员给你团队的注册令牌，用户名密码自己定，**首个注册者自动成为管理员**。
 本地只存会话令牌（`~/.guanjia.json`），密码不落盘。
 
+## 后端：它连的是什么
+
+guanjia 是**薄客户端**——不跑模型、不存业务数据。所有能力（构建智能体、
+工作流运行时、定时调度、审计台账、用户体系）来自一个你自己部署的工作流平台。
+这个取舍换来两件事：审计完整，且客户端无法伪造结果。
+
+代价也说清楚：**没有托管版，你得先有一个后端**。
+
+**已经有人在用了？** 找管理员要两样东西就够：
+
+```
+服务器地址（例：https://workflow.你的公司.com）
+注册令牌（团队共享，用来自助注册账号）
+```
+
+然后 `guanjia --login`，用户名密码自己定。**首个注册者自动成为管理员。**
+
+**要自己搭？** 后端需要提供这套 HTTP 接口（guanjia 只依赖它们）：
+
+| 用途 | 接口 |
+| --- | --- |
+| 身份 | `POST /api/v1/auth/register` · `POST /api/v1/auth/login` · `GET /api/v1/me` |
+| 对话 | `POST /api/v1/assistant/agent`（+ `/stream` 走 SSE） |
+| 工作流 | `GET /api/v1/applications` · `/{id}/draft` · `/{id}/runs` · `POST /{id}/runs` |
+| 构建 | `POST /{id}/builds` · `GET /api/v1/builds/{id}` · `POST /{id}/resume` |
+| 统筹 | `GET /api/v1/overview` · `/api/v1/health-report` · `/api/v1/scheduler/health` |
+
+带 `/health-report`、`/scheduler/health`、运行产物、有界事件列表的后端能让
+guanjia 显示更多信息；**没有这些接口的老后端会静默降级而不是报错**，
+详见[已知边界](docs/known-limits.md)。
+
+参考实现是一个 FastAPI + SQLite 的自托管平台（构建智能体驱动 DeepSeek
+或任何 OpenAI 兼容模型，也支持本机 vLLM）。想要现成的部署方式，
+在 issue 里说一声——这部分正在整理成可独立发布的形态。
+
 ## 坏了能发现，也能修
 
 **体检**：`guanjia doctor` 会点名坏掉（窗口内全败／最近连败）和停摆（有定时却没运行）
