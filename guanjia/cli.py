@@ -292,7 +292,8 @@ def main() -> None:
                 if d["recent_failures"]:
                     print(f"  {D}最近的失败：{N}")   # 不是今天的，别让上面那行带偏
                 for f in d["recent_failures"][:3]:
-                    print(f"  {R}✕ {f['workflow']} @{f['at']} {f['error'][:50]}{N}")
+                    times = f" ×{f['count']}" if f.get("count", 1) > 1 else ""
+                    print(f"  {R}✕ {f['workflow']}{times} @{f['at']} {f['error'][:50]}{N}")
             except RemoteError as error:
                 print(f"{R}{error}{N}")
             continue

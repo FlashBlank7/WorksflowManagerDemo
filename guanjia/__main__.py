@@ -85,7 +85,8 @@ def main() -> None:
             # 这一栏是「最近」不是「今天」——顶上写着今日运行，不说清楚会被当成今天的
             print("  最近的失败：")
         for f in d["recent_failures"][:5]:
-            print(f"  ✕ {f['workflow']} @{f['at']}  run {f['run_id']}  {f['error'][:60]}")
+            times = f" ×{f['count']}" if f.get("count", 1) > 1 else ""
+            print(f"  ✕ {f['workflow']}{times} @{f['at']}  run {f['run_id']}  {f['error'][:60]}")
         if d["recent_failures"]:
             print("  （想知道为什么失败：guanjia 里问「run <编号> 为什么失败」）")
         try:
