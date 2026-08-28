@@ -160,8 +160,15 @@ def _run_id_of(created: dict, where: str) -> str:
     客户端直接 KeyError: 'run_id'——一个栈回溯，既没说哪里不对，
     也没说该怎么改。契约只列了有哪些接口，没说返回什么形状。
     """
+    # 先确认它是个对象。后端回一个裸字符串/数字/true 的话，
+    # `.get` 会抛 AttributeError——而这个函数**存在的理由**
+    # 正是别让第三方实现者撞上栈回溯，自己抛就说不过去了。
+    if not isinstance(created, dict):
+        raise RemoteError(0, f"{where}的返回不是一个 JSON 对象，"
+                             f"拿到的是 {type(created).__name__}。"
+                             f'后端这个接口要回 {{"run_id": "…"}}')
     for key in ("run_id", "id"):
-        value = str((created or {}).get(key) or "").strip()
+        value = str(created.get(key) or "").strip()
         if value:
             return value
     raise RemoteError(0, f"{where}返回里没有运行号（run_id）。"

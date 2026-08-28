@@ -27,6 +27,18 @@ class RunIdContractTest(unittest.TestCase):
         self.assertEqual(_run_id_of({"id": "r-old", "run_id": "r-new"}, "发起运行"),
                          "r-new")
 
+    def test_a_non_object_response_does_not_raise_attributeerror(self):
+        """这个函数存在的理由就是别让实现者撞上栈回溯，自己抛就说不过去。
+
+        后端回一个裸字符串/数字/true 时，原本 `.get` 直接抛 AttributeError。
+        """
+        for payload in ("r1", 42, None, [], True, 0.0, "null"):
+            with self.assertRaises(RemoteError, msg=repr(payload)) as caught:
+                _run_id_of(payload, "发起运行")
+            message = str(caught.exception)
+            self.assertIn("run_id", message, repr(payload))
+            self.assertIn(type(payload).__name__, message, repr(payload))
+
     def test_missing_field_explains_what_the_backend_should_return(self):
         with self.assertRaises(RemoteError) as caught:
             _run_id_of({"foo": 1}, "发起运行")
