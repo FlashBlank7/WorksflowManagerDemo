@@ -29,7 +29,7 @@ HELP = """guanjia（管家）— 终端里说人话，远端工厂造出能跑�
   guanjia rerun <run前缀>                   用原输入重跑一次运行
   guanjia export <工作流> [-o 文件]         导出可搬运的快照 JSON
   guanjia import <文件> [--name] [--no-publish]  导入快照为新工作流
-  guanjia doctor                            连接自诊断：配置→可达→登录态→存储
+  guanjia doctor [--contract]               连接自诊断；--contract 查后端接口齐不齐
   guanjia completion bash|zsh               Tab 补全：eval \"$(guanjia completion bash)\"
   guanjia --version                         版本
 
@@ -123,6 +123,10 @@ def main() -> None:
         from .runcmd import import_main
         sys.exit(import_main(args[1:]))
     if args and args[0] == "doctor":
+        if "--contract" in args[1:]:
+            from .config import load_config
+            from .contract import run as contract_run
+            sys.exit(contract_run(load_config()))
         from .doctor import run as doctor_run
         sys.exit(doctor_run())
     if args and args[0] == "remote":
