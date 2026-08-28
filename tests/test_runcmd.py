@@ -123,3 +123,48 @@ class RunCmdTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoMatchListsCandidatesTest(unittest.TestCase):
+    """名字对不上时把候选列出来——run 和 export 要一样。
+
+    回归背景（2026-08-29）：只有 run 会列，export 回一句
+    「找不到唯一匹配「X」」就完了。而在 export 那条路上用户更需要提示：
+    他多半正想不起来名字叫什么。
+    """
+
+    @staticmethod
+    def _capture(wanted, matched, items):
+        import io
+        from contextlib import redirect_stderr
+
+        from guanjia.runcmd import _say_no_match
+
+        buffer = io.StringIO()
+        with redirect_stderr(buffer):
+            _say_no_match(wanted, matched, items)
+        return buffer.getvalue()
+
+    ITEMS = [{"name": "词频统计", "published": True},
+             {"name": "日报", "published": False}]
+
+    def test_no_match_lists_everything(self):
+        out = self._capture("蛤蟆", [], self.ITEMS)
+        self.assertIn("找不到「蛤蟆」", out)
+        self.assertIn("词频统计（已发布）", out)
+        self.assertIn("日报（未发布）", out)
+
+    def test_an_ambiguous_name_lists_only_the_matches(self):
+        out = self._capture("统", [self.ITEMS[0]], self.ITEMS)
+        self.assertIn("有歧义", out)
+        self.assertIn("词频统计", out)
+        self.assertNotIn("日报", out)
+
+    def test_a_long_list_is_cut_with_a_hint(self):
+        many = [{"name": f"工作流{i}", "published": True} for i in range(25)]
+        out = self._capture("蛤蟆", [], many)
+        self.assertIn("还有 15 个", out)
+        self.assertIn("guanjia today", out)
+
+    def test_an_empty_platform_does_not_crash(self):
+        self.assertIn("找不到", self._capture("蛤蟆", [], []))

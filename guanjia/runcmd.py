@@ -26,6 +26,23 @@ WORDS = {"succeeded": "跑成了", "failed": "没跑成", "cancelled": "取消�
 EXIT_CODES = {"succeeded": 0, "failed": 1, "cancelled": 1, "paused": 4}
 
 
+def _say_no_match(wanted: str, matched: list, items: list) -> None:
+    """名字对不上时，把候选列出来。
+
+    原先只有 run 这么做，export 只回一句「找不到唯一匹配「X」」——
+    同一件事两种待遇，而在 export 那条路上用户更需要提示：
+    他多半正想不起来名字叫什么。
+    """
+    pool = matched or items
+    head = "有歧义，匹配到多个" if matched else "找不到"
+    print(f"{head}「{wanted}」，可选：", file=sys.stderr)
+    for item in pool[:10]:
+        state = "已发布" if item.get("published") else "未发布"
+        print(f"  · {item['name']}（{state}）", file=sys.stderr)
+    if len(pool) > 10:
+        print(f"  …还有 {len(pool) - 10} 个，完整清单看 guanjia today", file=sys.stderr)
+
+
 def _resolve(items: list[dict], needle: str):
     """精确 id/名字优先，其次唯一子串；返回 dict 或（歧义/空的）候选列表。"""
     for item in items:
@@ -64,12 +81,7 @@ def main(argv: list[str]) -> int:
 
     target = _resolve(items, args.name)
     if isinstance(target, list):
-        pool = target or items
-        head = "有歧义，匹配到多个" if target else "找不到"
-        print(f"{head}「{args.name}」，可选：", file=sys.stderr)
-        for item in pool[:10]:
-            state = "已发布" if item["published"] else "未发布"
-            print(f"  · {item['name']}（{state}）", file=sys.stderr)
+        _say_no_match(args.name, target, items)
         return 2
     if not target["published"]:
         print(f"「{target['name']}」还没有发布版本——先在对话里把它搭完。", file=sys.stderr)
@@ -266,7 +278,7 @@ def export_main(argv: list[str]) -> int:
         print(f"{error}\n{next_step(error)}", file=sys.stderr)
         return 1
     if isinstance(target, list):
-        print(f"找不到唯一匹配「{args.name}」", file=sys.stderr)
+        _say_no_match(args.name, target, workflow.list_workflows(remote))
         return 2
     try:
         payload = workflow.export_snapshot(remote, target["id"])
