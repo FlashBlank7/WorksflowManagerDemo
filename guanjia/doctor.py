@@ -102,7 +102,7 @@ def run() -> int:
                 # broken 是跑起来出错，stale 是压根没跑（定时没开火）
                 if any(item.get("state") == "broken" for item in bad):
                     problems.append("跑不通的那几个：在对话里说「<名字> 坏了帮我修」，"
-                                    "莉莉丝会在原工作流上改")
+                                    "构建智能体会在原工作流上改")
                 if any(item.get("state") == "stale" for item in bad):
                     # 「去看看调度器还在不在」是句没法落地的建议——直接查给用户看
                     sched = _scheduler_health(cfg)

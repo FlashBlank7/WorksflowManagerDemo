@@ -109,7 +109,7 @@ def follow_build(remote: RemoteClient, build_id: str) -> None:
                 if status.get("published_version"):
                     say(f"搭好了！已发布 v{status['published_version']}——直接说「跑一下」就能用。")
                 elif status.get("pending_question"):
-                    say(f"莉莉丝在等你回答：{status['pending_question']}")
+                    say(f"构建时遇到一个问题，需要你确认：{status['pending_question']}")
                     try:
                         answer = input(f"{C}❓{N} ").strip()
                     except (KeyboardInterrupt, EOFError):

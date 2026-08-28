@@ -140,7 +140,7 @@ function renderChat(waiting){const stick=nearBottom();$('chat-col').innerHTML=S.
     if(m.kind==='action')return `<div style="margin:-8px 0 12px 42px;font:11.5px/1.5 ui-monospace,monospace;color:var(--faint)">⚙ ${esc(m.text)}</div>`;
     if(m.kind==='build')return `<div style="margin:0 0 14px 42px;border-left:3px solid var(--accent-line);padding:6px 12px;font:12px/1.7 ui-monospace,monospace;color:var(--sub);white-space:pre-wrap">${esc(m.text)}</div>`;
     if(m.kind==='answerbox')return `<div style="margin:0 0 14px 42px;display:flex;gap:8px;max-width:520px">
-      <input id="ab-input" placeholder="回答莉莉丝…" style="flex:1;border:1px solid var(--accent);border-radius:9px;padding:8px 11px"
+      <input id="ab-input" placeholder="回答这个问题…" style="flex:1;border:1px solid var(--accent);border-radius:9px;padding:8px 11px"
         onkeydown="if(event.key==='Enter')sendAnswer('${m.build_id}')">
       <button class="primary" onclick="sendAnswer('${m.build_id}')">转交</button></div>`;
     const last=waiting&&i===S.messages.length-1;
@@ -298,7 +298,7 @@ async function importWf(input){const file=input.files&&input.files[0];if(!file)r
   try{const r=await api('/api/workflow/import',{payload,name});
     let msg='已导入「'+r.name+'」'+(r.published?'并发布':'（草稿，未发布）');
     if(r.skipped_tests)msg+='\n测试无 mandatory 标记已跳过';
-    if(r.publish_error)msg+='\n发布被拒：'+r.publish_error+'\n草稿已留好，对话里可让莉莉丝补验收';
+    if(r.publish_error)msg+='\n发布被拒：'+r.publish_error+'\n草稿已留好，对话里可以让它补验收';
     alert(msg);boot()}
   catch(e){alert('导入失败：'+e.message)}}
 async function exportWf(btn){btn.disabled=true;
@@ -328,7 +328,7 @@ async function runWf(btn){const inputs={};let bad=false;
   btn.disabled=false;if(S.current)loadHistory(S.current.id)}
 async function generate(){const req=$('gen-req').value.trim();
   if(req.length<10){alert('需求至少 10 个字');return}
-  $('gen-btn').disabled=true;const p=$('gen-progress');p.classList.add('show');p.textContent='已提交远端，莉莉丝开工…';
+  $('gen-btn').disabled=true;const p=$('gen-progress');p.classList.add('show');p.textContent='已提交远端，开始搭建…';
   try{const r=await api('/api/workflow/generate',{requirement:req,
     thinking_enabled:$('gen-think').checked,effort:$('gen-effort').value});
     S.genBuild=r.build_id;pollGen()}
@@ -337,7 +337,7 @@ async function pollGen(){if(!S.genBuild)return;
   try{const s=await api('/api/workflow/build/'+S.genBuild);
     $('gen-progress').textContent=`状态 ${s.status} · 草稿修订 ${s.revision??0}`+
       (s.published_version?` · 已发布 v${s.published_version}`:'')+
-      (s.pending_question?`\n莉莉丝提问：${s.pending_question}`:'')+
+      (s.pending_question?`\n需要你确认：${s.pending_question}`:'')+
       (s.narration?`\n${s.narration}`:'')+(s.error?`\n${s.error}`:'');
     if(['published','ready','needs_attention','failed','cancelled'].includes(s.status)){
       $('gen-btn').disabled=false;boot();return}}catch(e){}
@@ -382,7 +382,7 @@ async function followBuild(buildId){
           S.messages.push({role:'assistant',text:`搭好了！已发布 v${st.published_version}——直接说「跑一下」就能用。`});
           boot()}
         else if(st.pending_question){
-          S.messages.push({role:'assistant',text:'莉莉丝在等你回答：'+st.pending_question});
+          S.messages.push({role:'assistant',text:'构建时遇到一个问题，需要你确认：'+st.pending_question});
           S.messages.push({role:'assistant',kind:'answerbox',build_id:buildId})}
         else{
           S.messages.push({role:'assistant',text:`构建结束（${st.status}${st.error?'：'+st.error:''}）——说「继续刚才的构建」可续跑。`})}

@@ -23,7 +23,7 @@ def new_session() -> str:
 
 def save(sid: str, messages: list[dict]) -> bool:
     """存盘失败返回 False 而不是抛——HOME 只读/磁盘满时，
-    招牌 REPL 不该在莉莉丝答完之后崩掉并把整段对话带走。"""
+    招牌 REPL 不该在回答刚出来之后崩掉并把整段对话带走。"""
     try:
         return _save(sid, messages)
     except OSError:

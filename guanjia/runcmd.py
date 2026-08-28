@@ -59,7 +59,7 @@ def main(argv: list[str]) -> int:
             print(f"  · {item['name']}（{state}）", file=sys.stderr)
         return 2
     if not target["published"]:
-        print(f"「{target['name']}」还没有发布版本——在对话里让莉莉丝先完成构建。", file=sys.stderr)
+        print(f"「{target['name']}」还没有发布版本——先在对话里把它搭完。", file=sys.stderr)
         return 1
 
     # 声明的类型表要**无条件**取：命令行给的永远是字符串，array/object 必须转，
@@ -117,7 +117,7 @@ def main(argv: list[str]) -> int:
             print(f"  超过 --wait {args.wait:.0f}s 还在跑；稍后可在 REPL 问「run {result['run_id']} 结果如何」")
         if result["status"] == "paused":
             node = result.get("waiting_node_id") or "?"
-            print(f"  等人工输入（节点 {node}）：到网页壳里填表，或 guanjia 里回答莉莉丝的提问")
+            print(f"  等人工输入（节点 {node}）：到网页壳里填表，或在 guanjia 对话里回答")
     return EXIT_CODES.get(result["status"], 3)
 
 
@@ -297,7 +297,7 @@ def import_main(argv: list[str]) -> int:
     state = "已发布" if result["published"] else "草稿（未发布）"
     print(f"✓ 导入「{result['name']}」→ {result['app_id'][:8]} · rev {result['revision']} · {state}")
     if result["skipped_tests"]:
-        print("  测试用例未带 mandatory 标记，已跳过（对话里可让莉莉丝补验收）")
+        print("  测试用例未带 mandatory 标记，已跳过（对话里可以让它补验收）")
     if result["publish_error"]:
         print(f"  发布被拒：{result['publish_error']}")
         print("  草稿已留好——对话里说「把它跑过验收再发布」即可")

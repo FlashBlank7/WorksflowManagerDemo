@@ -2,5 +2,5 @@
 
 PLUGINS = [
     {"id": "assistant", "title": "助手", "desc": "一般任务——由远端模型服务回答"},
-    {"id": "workflow", "title": "工作流", "desc": "生成（远端莉莉丝）与管理（运行/历史）"},
+    {"id": "workflow", "title": "工作流", "desc": "说需求生成，跑起来之后管运行与历史"},
 ]

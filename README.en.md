@@ -90,7 +90,7 @@ In practice it also finds related defects the error message never mentioned.
 guanjia CLI/Web (local, zero-dep)
    │  single channel: HTTPS + session token
    ▼
-Lilies platform (self-hosted): builder agent · workflow runtime · scheduler ·
+Workflow backend (yours to deploy): builder agent · runtime · scheduler ·
 audit ledger · user system
 ```
 
