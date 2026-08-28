@@ -75,6 +75,9 @@ if readline:
     readline.parse_and_bind("tab: complete")
 
 
+# 服务端会在出口剪掉这个内部标记；流式分片是逐字发出的，
+# 客户端这边再挡一道，免得它在屏幕上一闪而过
+_CONTEXT_MARK = re.compile(r"<上下文[^>]*/>\s*")
 _MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
 _MD_CODE = re.compile(r"`([^`]+)`")
 
@@ -85,6 +88,7 @@ def render_md(line: str) -> str:
     网页壳的 md() 做同一件事（改一边记得同步另一边）：
     终端里不渲染的话，**加粗** 就是四个星号，看着像坏了。
     """
+    line = _CONTEXT_MARK.sub("", line)
     line = _MD_BOLD.sub(f"{B}\\1{N}", line)
     return _MD_CODE.sub(f"{D}\\1{N}", line)
 
@@ -340,7 +344,7 @@ def main() -> None:
                     while "\n" in pending:
                         line, pending = pending.split("\n", 1)
                         print(render_md(line))
-                    if not ("*" in pending or "`" in pending):
+                    if not ("*" in pending or "`" in pending or "<" in pending):
                         print(pending, end="", flush=True)
                         pending = ""
                     streamed = True

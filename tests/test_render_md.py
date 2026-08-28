@@ -36,6 +36,14 @@ class RenderMarkdownTest(unittest.TestCase):
         self.assertEqual(render_md("**甲**和**乙**"),
                          f"{BOLD}甲{RESET}和{BOLD}乙{RESET}")
 
+    def test_internal_context_marker_is_filtered(self):
+        """服务端已经在出口剪了；流式分片逐字发出，这边再挡一道。"""
+        self.assertEqual(render_md('<上下文 上一轮做了="x" />它不能发邮件'),
+                         "它不能发邮件")
+
+    def test_ordinary_angle_brackets_survive(self):
+        self.assertEqual(render_md("用 <b> 标签"), "用 <b> 标签")
+
     def test_unclosed_marker_is_left_alone(self):
         # 模型写了半截，不能把后面整行都当成加粗吞掉
         self.assertEqual(render_md("**没有收尾"), "**没有收尾")
