@@ -1,6 +1,6 @@
 [project]
 name = "guanjia"
-version = "0.6.2"
+version = "0.7.0"
 description = "管家 — 终端里说人话，远端工厂替你造出能跑、有定时、可监控的工作流"
 readme = "README.md"
 requires-python = ">=3.10"
