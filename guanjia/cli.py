@@ -38,7 +38,6 @@ try:  # 方向键历史 + 跨会话持久（纯标准库，无 readline 的平�
     atexit.register(_save_history)
 except ImportError:
     readline = None  # type: ignore[assignment]
-import json
 import re
 import sys
 
@@ -203,7 +202,7 @@ def first_run_guide(server_default: str) -> bool:
 之后用 {B}guanjia --login{N} 再来。
 """)
     try:
-        answer = input(f"  现在就填吗？[Y/n] ").strip().lower()
+        answer = input("  现在就填吗？[Y/n] ").strip().lower()
     except (KeyboardInterrupt, EOFError):
         print()
         return False
