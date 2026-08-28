@@ -27,6 +27,26 @@ class RenderMarkdownTest(unittest.TestCase):
         for line in ("普通一行", "", "跑成了，行数 3、净字数 5"):
             self.assertEqual(render_md(line), line)
 
+    def test_python_operators_are_not_eaten(self):
+        """这是给开发者用的终端工具，不能把人要复制走的代码静默改错。
+
+        原本 ** 两侧不管有没有空白都当加粗，于是：
+            "2 ** 10 = 1024，2 ** 20"  →  "2 [粗] 10 = 1024，2 [复位] 20"
+            "{**a, **b}"               →  "{a, b}"
+        一问「怎么合并两个字典」就能撞上。
+        """
+        for code in ("2 ** 10 = 1024，2 ** 20 = 1048576",
+                     "合并字典用 {**a, **b}",
+                     "dict(**base, **patch)",
+                     "a ** b ** c",
+                     "kwargs 用 **kw 展开"):
+            self.assertEqual(render_md(code), code, code)
+
+    def test_whitespace_padded_markers_are_not_bold(self):
+        # 左右紧挨非空白才算标记（CommonMark 的 flanking 规则）
+        self.assertEqual(render_md("**  空白开头**"), "**  空白开头**")
+        self.assertEqual(render_md("**结尾空白  **"), "**结尾空白  **")
+
     def test_single_asterisk_is_not_markup(self):
         # 乘号、脚注这类单星号不能被吃掉
         self.assertEqual(render_md("星号*单个*不动"), "星号*单个*不动")
