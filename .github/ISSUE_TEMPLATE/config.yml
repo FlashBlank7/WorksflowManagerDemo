@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全问题
+    url: https://github.com/FlashBlank7/guanjia/blob/main/SECURITY.md
+    about: 请不要公开报告，见 SECURITY.md 里的邮箱
+  - name: 先看看已知边界
+    url: https://github.com/FlashBlank7/guanjia/blob/main/docs/known-limits.md
+    about: 有些「不能用」是已知取舍，那里写了原因

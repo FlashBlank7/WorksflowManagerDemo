@@ -233,3 +233,49 @@ class DocsLinkTest(unittest.TestCase):
             if "../Lilies" in md.read_text(encoding="utf-8")
         ]
         self.assertEqual(offenders, [])
+
+
+class RepoHygieneTest(unittest.TestCase):
+    """开源仓库的基本件：存在、内容真实、别指向不存在的东西。"""
+
+    def _root(self):
+        from pathlib import Path as _P
+        return _P(__file__).resolve().parent.parent
+
+    def test_license_is_real(self):
+        text = (self._root() / "LICENSE").read_text(encoding="utf-8")
+        self.assertIn("MIT License", text)
+        self.assertIn("Copyright", text)
+        self.assertIn("WITHOUT WARRANTY", text.upper())
+
+    def test_security_describes_the_actual_model(self):
+        """安全说明要写这个工具真实的取舍，不是套话。"""
+        text = (self._root() / "SECURITY.md").read_text(encoding="utf-8")
+        for topic in ("会话令牌", "网页壳没有登录", "SSH 端口转发", "@"):
+            self.assertIn(topic, text, f"SECURITY.md 少了 {topic}")
+
+    def test_issue_templates_are_valid_yaml(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("没装 pyyaml")
+        for path in (self._root() / ".github/ISSUE_TEMPLATE").glob("*.yml"):
+            with self.subTest(template=path.name):
+                yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    def test_bug_template_asks_for_doctor_output(self):
+        """不问 doctor 输出的 bug 模板等于每个 issue 都要来回三轮。"""
+        text = (self._root() / ".github/ISSUE_TEMPLATE/bug.yml").read_text(encoding="utf-8")
+        self.assertIn("guanjia doctor", text)
+        self.assertIn("required: true", text)
+
+    def test_template_links_point_at_files_that_exist(self):
+        """模板里写死了仓库内路径，文件挪了就是死链。"""
+        import re
+        from pathlib import Path as _P
+
+        root = self._root()
+        for path in (root / ".github/ISSUE_TEMPLATE").glob("*.yml"):
+            for target in re.findall(r"blob/main/([\w./-]+)", path.read_text(encoding="utf-8")):
+                with self.subTest(template=path.name, target=target):
+                    self.assertTrue((root / target).exists(), f"{target} 不存在")

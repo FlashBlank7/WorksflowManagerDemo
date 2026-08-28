@@ -1,0 +1,60 @@
+name: 报告一个问题
+description: 用不了、结果不对、或者报错看不懂
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢来报。**先贴 `guanjia doctor` 的输出**——它会说清是配置、网络、
+        后端版本还是本地存储的问题，比"用不了"能省下好几轮来回。
+
+        安全问题请不要在这里公开，见 [SECURITY.md](../blob/main/SECURITY.md)。
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: guanjia doctor 的输出
+      description: 直接粘贴，敏感信息（服务器地址）可以打码
+      render: text
+      placeholder: |
+        ✓ 配置：档案「default」 server=https://...
+        ✓ 可达性：... 有响应（4 ms）
+        ✕ 登录态：令牌已失效（401）
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 你做了什么、期望什么、实际什么
+      placeholder: |
+        敲了：guanjia run 日报 month=2026-08
+        期望：跑完给出报表
+        实际：报「输入 month 不对：要填 array 类型的 JSON」，但它声明的就是 string
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: guanjia --version
+      placeholder: guanjia 0.6.2
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: 操作系统、Python 版本；如果是在 SSH/容器里跑请说明
+      placeholder: Ubuntu 22.04 · Python 3.11 · 通过 SSH 连服务器
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其它
+      description: |
+        报错完整堆栈（如果有）。**出现 Traceback 一定要贴**——
+        本项目把"用户看到裸堆栈"本身当成缺陷。
+      render: text

@@ -1,0 +1,36 @@
+name: 提一个想法
+description: 希望它能做到某件事
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提之前可以先看一眼 [已知边界](../blob/main/docs/known-limits.md)
+        和 [决策记录](../blob/main/docs/decisions/)——有些事是刻意不做的，
+        那里写了当时的理由。如果你觉得理由不成立，正好在 issue 里说。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你实际遇到的麻烦是什么
+      description: 描述场景而不是方案——你想要的功能未必是解决它的最好办法
+      placeholder: |
+        我有六个工作流分布在两个环境，每天早上要挨个确认跑没跑。
+        现在得切两次档案、各敲一次 today。
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你设想的样子（可选）
+      placeholder: guanjia today --all 一次列出所有档案的情况
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 这件事应该在哪边做
+      options:
+        - label: 客户端（guanjia 本身）
+        - label: 后端（工作流平台）
+        - label: 不确定
