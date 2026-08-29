@@ -59,6 +59,10 @@ class TestItIsActuallyWiredUp:
         ("guanjia/plugins/workflow.py", "clip(text, 80)"),
         ("guanjia/remote.py", "clip(text, 120)"),
         ("guanjia/failures.py", "clip(error, 60)"),
+        # 网页壳这两处不是 print，是塞进 JSON 交给页面显示的正文——
+        # 下面那条"不许再有光秃秃的 [:N]"只盯 print 行，抓不到它们。
+        ("guanjia/app.py", "clip(error, 150)"),    # 连不上远端时页面上那句
+        ("guanjia/app.py", "clip(error, 200)"),    # 对话流里的报错
     ])
     def test_the_call_site_uses_it(self, path, needle):
         assert needle in _sources()[path], f"{path} 没接上"

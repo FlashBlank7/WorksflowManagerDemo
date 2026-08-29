@@ -21,6 +21,7 @@ from importlib import resources
 from . import sessions
 from .config import list_profiles, load_config, save_login, use_profile
 from .plugins import PLUGINS, assistant, workflow
+from .cut import clip
 from .remote import RemoteClient, RemoteError
 
 
@@ -192,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
                     })
                 except Exception as error:
                     self._json({"configured": True, "connected": False,
-                                "server": self.remote.server, "detail": str(error)[:150],
+                                "server": self.remote.server, "detail": clip(error, 150),
                                 "plugins": PLUGINS, "workflows": [], **_profiles_meta()})
             elif self.path == "/api/sessions":
                 self._json(sessions.list_sessions())
@@ -319,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode("utf-8"))
                         self.wfile.flush()
                 except Exception as error:  # noqa: BLE001 - 错误走流内呈现
-                    payload = json.dumps({"type": "error", "text": str(error)[:200]}, ensure_ascii=False)
+                    payload = json.dumps({"type": "error", "text": clip(error, 200)}, ensure_ascii=False)
                     self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
                 return
             elif self.path == "/api/chat":
