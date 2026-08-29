@@ -110,8 +110,13 @@ def main(argv: list[str]) -> int:
     schema: list[dict] = []
     try:
         schema = workflow.input_schema(remote, target["id"])
-    except RemoteError:
-        pass
+    except RemoteError as error:
+        # 和下面那条同样的道理，原来这儿是光秃秃一个 pass。
+        # 取不到类型表 ⇒ **不转换**：声明成 array/object 的输入会被当字符串发出去，
+        # 服务端在下游某个节点炸开，报错完全指不到"你的参数没被转成数组"。
+        # 照发是对的（不能凭猜测挡住一次正当调用），闷着不对。
+        print(f"（读不出这个工作流要填什么（{error}）；参数按原样字符串发出，"
+              f"声明成数组/对象的输入可能因此跑不通）", file=sys.stderr)
     except workflow.UnknownWorkflowShape as error:
         # 读不懂这张图的入口——照发请求，让服务端去判，但**说一声**。
         # 不拦：我们并不知道它一定会失败，拦下来等于凭猜测挡住一次正当调用。

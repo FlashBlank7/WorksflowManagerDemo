@@ -82,3 +82,50 @@ class RequiredInputsTest(unittest.TestCase):
         self.assertIn("要给出工作流名字", text)
         self.assertNotIn("有歧义", text)
         run.assert_not_called()
+
+
+class SchemaFetchFailureIsSaidOutLoud(unittest.TestCase):
+    """取不到类型表时也要说一声——原来这一支是光秃秃一个 pass。
+
+    取不到 ⇒ **不转换**：声明成 array/object 的输入会被当字符串发出去
+    （真机 60 个声明输入里 32 个是 array），服务端在下游某个节点炸开，
+    报错完全指不到"你的参数没被转成数组"。
+    照发是对的（不能凭猜测挡住一次正当调用），闷着不对——
+    旁边 UnknownWorkflowShape 那一支一直是这么办的，这支漏了。
+    """
+
+    def _run(self, error):
+        target = {"id": "a1", "name": "统计", "published": True}
+        err = io.StringIO()
+        with patch.object(runcmd.workflow, "list_workflows", return_value=[target]), \
+             patch.object(runcmd.workflow, "input_schema", side_effect=error), \
+             patch.object(runcmd.workflow, "run",
+                          return_value={"run_id": "r1", "status": "succeeded",
+                                        "outputs": {}, "error": ""}) as run, \
+             patch.object(runcmd, "RemoteClient", MagicMock()), \
+             patch.object(runcmd, "load_config",
+                          return_value={"server": "s", "token": "t"}), \
+             redirect_stderr(err), redirect_stdout(io.StringIO()):
+            code = runcmd.main(["统计", "items=[1,2]", "--json"])
+        return code, err.getvalue(), run
+
+    def test_it_says_something(self):
+        code, text, run = self._run(runcmd.RemoteError(500, "boom"))
+        self.assertIn("读不出这个工作流要填什么", text)
+
+    def test_it_warns_that_arrays_may_not_go_through(self):
+        """光说"读不出"不够——得说清这会导致什么，不然下游报错莫名其妙。"""
+        _, text, _ = self._run(runcmd.RemoteError(500, "boom"))
+        self.assertIn("数组", text)
+
+    def test_it_still_sends_the_run(self):
+        """不拦：我们并不知道它一定会失败，拦下来等于凭猜测挡住一次正当调用。"""
+        _, _, run = self._run(runcmd.RemoteError(500, "boom"))
+        run.assert_called_once()
+
+    def test_the_unknown_shape_branch_still_speaks_too(self):
+        """对照组：旁边那一支本来就会说话，别在改这支时把它碰坏。"""
+        _, text, run = self._run(
+            runcmd.workflow.UnknownWorkflowShape("认不出入口节点"))
+        self.assertIn("读不出这个工作流要填什么", text)
+        run.assert_called_once()
