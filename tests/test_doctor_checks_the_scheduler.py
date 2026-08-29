@@ -58,25 +58,36 @@ def _run(*, health=None, scheduler=None):
 class DoctorChecksSchedulerTest(unittest.TestCase):
     def test_a_healthy_run_still_reports_the_scheduler(self):
         """所有工作流都好的时候，也得看见调度器那一行。"""
-        _, output = _run(scheduler={"alive": True, "seconds_since_tick": 3})
+        _, output = _run(scheduler=({"alive": True, "seconds_since_tick": 3}, ""))
         self.assertIn("调度器在跑", output)
 
     def test_a_dead_scheduler_is_caught_even_when_nothing_is_stale_yet(self):
         """这就是 bug 本体：没有工作流误点，但调度器已经死了。"""
-        code, output = _run(scheduler={"alive": False, "seconds_since_tick": 900})
+        code, output = _run(scheduler=({"alive": False, "seconds_since_tick": 900}, ""))
         self.assertIn("调度器停了", output)
         self.assertNotIn("一切正常", output)
         self.assertEqual(code, 1)
 
     def test_it_says_what_to_do_about_a_dead_scheduler(self):
-        _, output = _run(scheduler={"alive": False, "seconds_since_tick": 900})
+        _, output = _run(scheduler=({"alive": False, "seconds_since_tick": 900}, ""))
         self.assertIn("定时任务不会开火", output)
 
     def test_a_missing_endpoint_says_not_checked_rather_than_nothing(self):
         """老服务端没这个接口——如实说"没验"，不能默默跳过还宣布全好。"""
-        code, output = _run(scheduler=None)
+        code, output = _run(scheduler=(None, "远端没有这个接口，多半是旧版本"))
         self.assertIn("没验", output)
         self.assertEqual(code, 0, "接口缺失不该判死")
+
+    def test_the_reason_for_not_checking_is_specific(self):
+        """没查成的原因要分开说。
+
+        第一版一律打「没验（远端没有这个接口，多半是旧版本）」——
+        可 401 的时候接口明明在，只是没登录。用户照这句去升级后端，
+        白费半天工夫。诊断工具给错方向比不给方向更糟。
+        """
+        _, output = _run(scheduler=(None, "还没登录，查不了"))
+        self.assertIn("还没登录", output)
+        self.assertNotIn("旧版本", output)
 
     def test_the_scheduler_is_only_queried_once(self):
         """原先健康分支和 stale 分支各查一次，会打两行。"""
@@ -84,7 +95,7 @@ class DoctorChecksSchedulerTest(unittest.TestCase):
 
         def fake_sched(cfg):
             calls.append(1)
-            return {"alive": True, "seconds_since_tick": 5}
+            return {"alive": True, "seconds_since_tick": 5}, ""
 
         FakeClient.report = {"counts": {"ok": 0, "stale": 1},
                              "items": [{"workflow": "日报", "state": "stale",
@@ -104,7 +115,7 @@ class DoctorChecksSchedulerTest(unittest.TestCase):
         _, output = _run(
             health={"counts": {"ok": 0, "stale": 1},
                     "items": [{"workflow": "日报", "state": "stale", "reason": "没开火"}]},
-            scheduler={"alive": True, "seconds_since_tick": 5})
+            scheduler=({"alive": True, "seconds_since_tick": 5}, ""))
         self.assertIn("调度器是活的", output)
 
 

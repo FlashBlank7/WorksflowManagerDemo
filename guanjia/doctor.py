@@ -18,13 +18,25 @@ BAD = "\x1b[31m✕\x1b[0m"
 WARN = "\x1b[33m!\x1b[0m"
 
 
-def _scheduler_health(cfg: dict) -> dict | None:
-    """查平台调度器的死活；老远端没有这个端点就返回 None（不当成问题）。"""
+def _scheduler_health(cfg: dict) -> tuple[dict | None, str]:
+    """查平台调度器的死活。回 (结果, 没查成的原因)。
+
+    原因要分开说。第一版一律回 None，打出来的是
+    「没验（远端没有这个接口，多半是旧版本）」——
+    可 401 的时候接口明明在，只是没登录。用户照着这句去升级后端，
+    白费半天工夫。诊断工具给错方向比不给方向更糟。
+    """
     try:
         return RemoteClient(cfg["server"], cfg["token"], timeout=8.0).request(
-            "GET", "/api/v1/scheduler/health")
-    except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
-        return None
+            "GET", "/api/v1/scheduler/health"), ""
+    except RemoteError as error:
+        if error.status in (401, 403):
+            return None, "还没登录，查不了"
+        if error.status in (404, 405):
+            return None, "远端没有这个接口，多半是旧版本"
+        return None, f"远端答了 {error.status}"
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return None, "连不上远端"
 
 
 def run() -> int:
@@ -100,9 +112,9 @@ def run() -> int:
     # 诊断工具最不该做的事，就是在没查过某个部件的情况下宣布全好。
     sched: dict | None = None
     if reachable and cfg["token"]:
-        sched = _scheduler_health(cfg)
+        sched, why = _scheduler_health(cfg)
         if sched is None:
-            print(f"{WARN} 调度器：没验（远端没有这个接口，多半是旧版本）")
+            print(f"{WARN} 调度器：没验（{why}）")
         elif sched.get("alive"):
             behind = sched.get("seconds_since_tick")
             print(f"{OK} 调度器在跑（{behind:.0f}s 前刚轮询过）"
