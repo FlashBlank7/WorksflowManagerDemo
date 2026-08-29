@@ -68,8 +68,8 @@ def _private(path: Path) -> None:
         pass
 
 
-def _write(active: str, profiles: dict) -> None:
-    """先写同目录的临时文件（一出生就是 0600），再原子换名过去。
+def write_private(path: Path, text: str) -> None:
+    """写一份只有自己能读的文件：先写同目录临时文件（一出生就 0600），再换名过去。
 
     两件事一起解决，都是量出来的，不是设想的：
 
@@ -78,31 +78,41 @@ def _write(active: str, profiles: dict) -> None:
        6103 次采样里 8 次逮到 0644。这台机器上确实还有别的用户。
        用 os.open 带 0o600 建，就没有那一段。
 
-    2. **半截配置**。write_text 是先截断再写，写到一半掉电/被杀，
-       留下的是一个空的或残缺的 json——下次启动 _read_raw 把它当空配置
-       吞掉（那儿是 except 全捕），用户的登录**就这么没了**，
-       而且没有任何提示。换名是原子的：要么是旧的完整配置，要么是新的。
+    2. **半截文件**。write_text 是先截断再写，写到一半掉电/被杀，
+       留下的是一个空的或残缺的 json——而两处读端都是"坏了就当没有"
+       （配置那边 except 全捕、会话那边捕 JSONDecodeError），
+       于是**用户的登录/整段对话就这么没了**，还没有任何提示。
+       注意丢的不只是这次要写的东西：截断先发生，**上一次的内容也一起没了**。
+       换名是原子的：要么是旧的完整文件，要么是新的。
+
+    放在这里、并且是公开名字（不带下划线），是因为会话存储也要用同一份实现。
+    两处各写一遍的话，迟早只有一处被修——"同一个判据没铺满所有出口"
+    这一周已经中过好几次了。
     """
-    path = _config_path()
-    payload = json.dumps({"active": active, "profiles": profiles},
-                         ensure_ascii=False, indent=1)
+    payload = text.encode("utf-8")
     tmp = path.with_name(path.name + f".tmp{os.getpid()}")
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            os.write(fd, payload.encode("utf-8"))
+            os.write(fd, payload)
         finally:
             os.close(fd)
         os.replace(tmp, path)
     except OSError:
         # 临时文件这条路走不通（只读目录、怪文件系统……）就退回直写：
-        # **存不下配置比权限松更糟**，这是 _private 里已经定过的调子。
+        # **存不下比权限松更糟**，这是 _private 里已经定过的调子。
         try:
             os.unlink(tmp)
         except OSError:
             pass
-        path.write_text(payload, encoding="utf-8")
+        path.write_text(text, encoding="utf-8")
     _private(path)
+
+
+def _write(active: str, profiles: dict) -> None:
+    write_private(_config_path(),
+                  json.dumps({"active": active, "profiles": profiles},
+                             ensure_ascii=False, indent=1))
 
 
 def load_config(server: str | None = None, token: str | None = None,

@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from .config import write_private
+
 DIR = Path.home() / ".guanjia" / "sessions"
 
 
@@ -37,17 +39,17 @@ def _save(sid: str, messages: list[dict]) -> bool:
     except OSError:
         pass
     first_user = next((m for m in messages if m.get("role") == "user" and m.get("text")), None)
-    target = _path(sid)
-    target.write_text(json.dumps({
+    # 和存令牌走同一份实现：一出生就 0600，写完换名过去。
+    # 这里原来是 write_text 之后再 chmod——而 write_text 先截断，
+    # 存到一半被中断（网页壳被 Ctrl-C、机器掉电）留下半截 json，
+    # load 捕 JSONDecodeError 之后返回 None，**整段对话就这么没了**，
+    # 而且丢的不只是这一轮：截断先发生，上一次存好的内容也一起没。
+    write_private(_path(sid), json.dumps({
         "id": sid,
         "title": (first_user["text"][:24] if first_user else "新对话"),
         "updated_at": time.strftime("%Y-%m-%d %H:%M"),
         "messages": [m for m in messages if m.get("kind") != "answerbox"][-200:],
-    }, ensure_ascii=False), encoding="utf-8")
-    try:  # 单个会话文件同样收权限（目录收了，文件也别落下）
-        target.chmod(0o600)
-    except OSError:
-        pass
+    }, ensure_ascii=False))
     return True
 
 

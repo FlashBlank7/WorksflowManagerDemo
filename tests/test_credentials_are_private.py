@@ -230,6 +230,40 @@ class SessionsArePrivateTest(unittest.TestCase):
             body = json.loads((self.dir / "abc123.json").read_text(encoding="utf-8"))
         self.assertIn("机密内容", json.dumps(body, ensure_ascii=False))
 
+    def test_a_crash_midway_keeps_the_previous_conversation(self):
+        """存到一半被中断，留下的必须还是**上一次的完整对话**。
+
+        原来是 write_text：先截断再写。网页壳被 Ctrl-C、机器掉电，
+        留下半截 json，load 捕 JSONDecodeError 返回 None——
+        整段对话就这么没了。而且丢的不只是这一轮：
+        截断先发生，**上一次存好的内容也一起没**。
+        """
+        from guanjia import sessions
+
+        with patch.object(sessions, "DIR", self.dir):
+            sessions.save("abc123", [{"role": "user", "text": "第一轮"}])
+
+            def boom(fd, data):
+                raise KeyboardInterrupt("拔电源")
+
+            with patch.object(os, "write", boom):
+                with self.assertRaises(KeyboardInterrupt):
+                    sessions.save("abc123", [{"role": "user", "text": "第二轮"}])
+
+            back = sessions.load("abc123")
+        self.assertIsNotNone(back, "上一次的对话被写坏了")
+        self.assertIn("第一轮", json.dumps(back, ensure_ascii=False))
+
+    def test_sessions_and_the_config_share_one_implementation(self):
+        """两处各写一遍的话，迟早只有一处被修。
+
+        同一个判据没铺满所有出口，这一周已经中过好几次——
+        所以这里直接钉住"用的是同一个函数"。
+        """
+        from guanjia import config, sessions
+
+        self.assertIs(sessions.write_private, config.write_private)
+
 
 if __name__ == "__main__":
     unittest.main()
