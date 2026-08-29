@@ -67,3 +67,62 @@ class WebBadRequestTest(unittest.TestCase):
             for leak in ("Traceback", "object has no attribute",
                          "Expecting value", "unknown url type"):
                 self.assertNotIn(leak, body.get("error", ""), f"{raw[:20]!r}")
+
+
+class LoopbackNeedsAKeyTooTest(unittest.TestCase):
+    """回环也要钥匙——「能连到这个端口的人就是你」在多用户主机上不成立。
+
+    2026-08-29：原来的判断是「绑到回环之外才要钥匙」。可 127.0.0.1:7800
+    对同机**每一个**账号都开着，而网页壳背后是你的平台令牌——
+    别人打开就能以你的身份跑工作流、看全部数据。
+    这台开发机上就有另外两个用户在跑东西；同一天刚因为一样的理由
+    把 .env 和库文件从 0644 收成了 0600。
+
+    代价很小：钥匙第一次访问后种进 Cookie，书签照样能用。
+    确定独占一台机器的人可以 --no-key，但那要他自己说。
+
+    这里**真的跑一遍 main()**（把 serve_forever 换掉），不重建一份参数表：
+    重建的那份和真的那份迟早分家，而分家之后它还会报绿。
+    今天已经为这个毛病改过冒烟脚本的内部词清单。
+    """
+
+    def _run_main(self, argv):
+        import io
+        from contextlib import redirect_stdout
+        from unittest.mock import patch
+
+        webapp.Handler.access_key = ""
+        served = {}
+
+        class FakeServer:
+            def serve_forever(self):
+                served["ok"] = True
+
+        out = io.StringIO()
+        with patch.object(webapp, "_make_server", lambda h, p: FakeServer()), \
+             patch.object(webapp, "load_config",
+                          lambda *a, **k: {"server": "http://x", "token": "",
+                                           "user": "", "profile": "default"}), \
+             patch.object(webapp.sys, "argv", ["guanjia-web", *argv]), \
+             redirect_stdout(out):
+            webapp.main()
+        self.assertTrue(served.get("ok"), "服务没起来，这条测试等于没测")
+        return webapp.Handler.access_key, out.getvalue()
+
+    def tearDown(self):
+        webapp.Handler.access_key = ""
+
+    def test_a_key_is_required_by_default_even_on_loopback(self):
+        key, printed = self._run_main([])
+        self.assertTrue(key, "回环启动没要钥匙——同机别人就能用你的平台账号")
+        self.assertIn(f"?k={key}", printed, "地址里得带着钥匙，否则用户打不开")
+
+    def test_no_key_is_opt_in_and_says_what_it_costs(self):
+        key, printed = self._run_main(["--no-key"])
+        self.assertEqual(key, "")
+        self.assertIn("同机任何账号", printed, "关掉了就得说清代价")
+
+    def test_going_public_still_gets_a_key_and_a_warning(self):
+        key, printed = self._run_main(["--host", "0.0.0.0"])
+        self.assertTrue(key)
+        self.assertIn("已对外开放", printed)

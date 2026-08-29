@@ -422,6 +422,8 @@ def main() -> None:
                              "但会自动要求访问密钥（网页壳本身没有登录）")
     parser.add_argument("--open", action="store_true", help="启动后用默认浏览器打开")
     parser.add_argument("--app", action="store_true", help="启动后以独立窗口打开（chromium 系）")
+    parser.add_argument("--no-key", action="store_true",
+                        help="不要访问密钥（仅限确定这台机器上只有你一个用户）")
     args = parser.parse_args()
     cfg = load_config(args.server, args.token)
     if cfg["token"]:
@@ -445,7 +447,17 @@ def main() -> None:
         print(f"起不来：地址 {host} 解析不了 —— {error}", file=sys.stderr)
         sys.exit(1)
 
-    if not loopback:
+    # 回环也要钥匙。
+    #
+    # 原来的判断是「绑到回环之外才要钥匙」，理由是"能连到这个端口的人就是你"。
+    # 在多用户主机上这句话不成立：127.0.0.1:7800 对同机**每一个**账号都开着，
+    # 而网页壳背后是你的平台令牌——别人打开就能以你的身份跑工作流、看全部数据。
+    # 这台开发机上就有另外两个用户在跑东西（2026-08-29 实测），
+    # 而同一天刚因为同样的理由把 .env 和库文件从 0644 收成 0600。
+    #
+    # 代价很小：钥匙第一次访问后就种进 Cookie，书签照样能用；
+    # --open / --app 直接带着钥匙打开。确定独占一台机器的人可以 --no-key。
+    if not args.no_key:
         import secrets
 
         Handler.access_key = secrets.token_urlsafe(12)
@@ -460,6 +472,12 @@ def main() -> None:
     if not loopback:
         print("  ⚠ 已对外开放：网页壳没有登录，凭这个地址就能用你的平台账号。")
         print("    密钥只在这次启动有效；换成 SSH 端口转发更稳妥。")
+    elif Handler.access_key:
+        print("  密钥只在这次启动有效。同机其他账号没有它就打不开"
+              "（网页壳背后是你的平台令牌）。")
+    else:
+        print("  ⚠ --no-key：同机任何账号打开这个地址，"
+              "就能以你的身份用平台。")
     for line in _remote_hint(args.port):
         print(line)
     if args.open or args.app:
