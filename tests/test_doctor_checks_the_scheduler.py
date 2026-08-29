@@ -121,3 +121,34 @@ class DoctorChecksSchedulerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AliveIsNotAllFiringTest(unittest.TestCase):
+    """「调度器在跑」不等于「所有定时都开火了」。
+
+    平台侧 2026-08-29 补了 per-application 保护：一个坏工作流不再拖垮全体。
+    但它自己每轮都被跳过，而调度器照样心跳、照样报 alive。
+    doctor 这时打 ✓ 就是替它瞒着——诊断工具最不该做的就是这个。
+    """
+
+    def test_a_skipped_schedule_is_not_a_green_tick(self):
+        code, out = _run(scheduler=(
+            {"alive": True, "seconds_since_tick": 3,
+             "last_error": "这一轮跳过了 「服务器GPU日报」：KeyError: 版本查不到"}, ""))
+        self.assertIn("没能开火", out)
+        self.assertIn("服务器GPU日报", out)
+        self.assertNotIn("一切正常", out)
+        self.assertNotEqual(code, 0, "有定时不开火，退出码不该是 0")
+
+    def test_a_clean_scheduler_is_still_a_green_tick(self):
+        code, out = _run(scheduler=({"alive": True, "seconds_since_tick": 3,
+                                     "last_error": ""}, ""))
+        self.assertIn("调度器在跑", out)
+        self.assertNotIn("没能开火", out)
+        self.assertEqual(code, 0)
+
+    def test_a_backend_without_the_field_is_treated_as_clean(self):
+        """老远端没有 last_error——别凭空报一个不存在的问题。"""
+        code, out = _run(scheduler=({"alive": True, "seconds_since_tick": 3}, ""))
+        self.assertNotIn("没能开火", out)
+        self.assertEqual(code, 0)

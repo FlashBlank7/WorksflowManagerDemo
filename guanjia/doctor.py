@@ -117,8 +117,18 @@ def run() -> int:
             print(f"{WARN} 调度器：没验（{why}）")
         elif sched.get("alive"):
             behind = sched.get("seconds_since_tick")
-            print(f"{OK} 调度器在跑（{behind:.0f}s 前刚轮询过）"
-                  if isinstance(behind, (int, float)) else f"{OK} 调度器在跑")
+            # 「活着」不等于「所有定时都开火了」。某个工作流每轮都被跳过
+            # （版本查不到、配置坏了、建运行失败）时，调度器照样心跳、
+            # 照样报活着，而那个定时任务在无声地不跑。
+            # 打 ✓ 等于替它瞒着——诊断工具最不该做的就是这个。
+            skipped = (sched.get("last_error") or "").strip()
+            mark = WARN if skipped else OK
+            print(f"{mark} 调度器在跑（{behind:.0f}s 前刚轮询过）"
+                  if isinstance(behind, (int, float)) else f"{mark} 调度器在跑")
+            if skipped:
+                print(f"  但有定时没能开火：{skipped[:160]}")
+                problems.append("有定时任务每轮都被跳过——"
+                                "看上面那条原因，多半是它的发布版或配置有问题")
         else:
             since = sched.get("seconds_since_tick")
             detail = (sched.get("last_error") or "").strip()
