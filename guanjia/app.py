@@ -255,7 +255,10 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._json({"error": "not found"}, 404)
         except RemoteError as error:
-            self._json({"error": str(error)}, 502)
+            # 401 照 401 回，别一律 502。同一个原因（还没配远端／令牌失效）
+            # 走 POST 时回 401、走 GET 时回 502，是同一个判据在两个出口上
+            # 长得不一样——而 502 说的是"上游坏了"，跟"你还没登录"是两回事。
+            self._json({"error": str(error)}, 401 if error.status == 401 else 502)
         except Exception as error:  # noqa: BLE001
             self._json({"error": str(error)}, 500)
 

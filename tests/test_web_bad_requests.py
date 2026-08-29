@@ -10,6 +10,8 @@
 最后那条最要紧：在网页登录框里把地址写错，是最常见的一步。
 """
 import json
+import os
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -126,3 +128,70 @@ class LoopbackNeedsAKeyTooTest(unittest.TestCase):
         key, printed = self._run_main(["--host", "0.0.0.0"])
         self.assertTrue(key)
         self.assertIn("已对外开放", printed)
+
+
+class NoRemoteConfiguredIsACleanRefusal(unittest.TestCase):
+    """还没登录就开网页壳——每个要远端的接口都得干净地回 401。
+
+    变异验证（2026-08-30，全量 664 条）：把 `_need_remote` 里那句
+    `raise RemoteError(401, "未配置远端连接")` 去掉，一条都没红。
+    去掉之后它返回 None，下游 `.request(...)` 抛 AttributeError——
+    用户看到的是 500 和一段 traceback，而真相只是"还没配远端"。
+    **能说清的事不该变成 500。**
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.old_home = os.environ.get("HOME")
+        os.environ["HOME"] = self.tmp.name
+        self.addCleanup(lambda: os.environ.__setitem__("HOME", self.old_home)
+                        if self.old_home is not None else None)
+        self.old_remote = webapp.Handler.remote
+        webapp.Handler.remote = None          # 就是"还没配"的样子
+        self.addCleanup(lambda: setattr(webapp.Handler, "remote", self.old_remote))
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), webapp.Handler)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+
+    def _get(self, path):
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}")
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.read()
+
+    def test_a_remote_backed_route_says_401_not_502(self):
+        """原来 GET 一律回 502，而同样的原因走 POST 回的是 401。
+
+        502 说的是"上游坏了"，跟"你还没登录"是两回事——
+        写脚本的人按 502 会去查后端，其实只要登录一下。
+        """
+        status, body = self._get("/api/workflow/archived")
+        self.assertEqual(status, 401, body[:200])
+
+    def test_get_and_post_agree_on_the_status(self):
+        """同一个原因在两个出口上不该长得不一样。"""
+        get_status, _ = self._get("/api/workflow/archived")
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/workflow/run", method="POST",
+            data=b"{}", headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                post_status = response.status
+        except urllib.error.HTTPError as error:
+            post_status = error.code
+        self.assertEqual(get_status, post_status)
+
+    def test_the_reason_is_readable(self):
+        _, body = self._get("/api/workflow/archived")
+        self.assertIn("未配置远端连接".encode("utf-8"), body)
+
+    def test_the_static_page_still_loads(self):
+        """反向：没配远端不等于整个壳都打不开——登录页正是要在这时候出现。"""
+        status, body = self._get("/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"lg-prof", body)

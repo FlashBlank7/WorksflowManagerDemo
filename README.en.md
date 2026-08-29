@@ -69,6 +69,20 @@ guanjia doctor     # connectivity self-check with plain-language fixes
 eval "$(guanjia completion bash)"   # Tab completion (zsh works too)
 ```
 
+Exit codes for `guanjia run` / `rerun` are a promise to your scripts, not an
+implementation detail:
+
+| Code | Meaning | What a script should do |
+|------|---------|-------------------------|
+| 0 | Succeeded | carry on |
+| 1 | Did not succeed (failed or cancelled) | treat as a failure |
+| 2 | Wrong usage (no such workflow, argument not `k=v`, missing required input) | fix the command, not the workflow |
+| 3 | Status this client does not recognise | treat as a failure and check the backend version |
+| 4 | Paused, waiting for human input | do not retry; go fill that step in |
+
+Keep 2 apart from 1: one means your command was wrong, the other means the
+workflow really did not succeed.
+
 - **Chat is the interface**: streaming answers; workflow builds show progress
   cards inline, and the builder's clarifying questions are answered right in chat
 - **Sessions persist** in `~/.guanjia/sessions/`, shared between CLI and web
