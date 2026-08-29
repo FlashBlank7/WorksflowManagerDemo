@@ -337,9 +337,21 @@ async function loadHistory(id){const box=$('run-history');if(!box)return;
         '<span class="h-st">'+mk+'</span>'+
         '<span class="h-at">'+esc(r.at)+'</span>'+
         '<span class="h-tx">'+esc(r.error||r.brief||'')+'</span>'+
-        '<span class="h-by">'+esc(r.by||'⏰ 定时')+'</span>'+rb+'</div>'+
+        '<span class="h-by">'+esc(byLabel(r.by))+'</span>'+rb+'</div>'+
         '<div class="h-ev" id="ev-'+r.id+'"></div></div>'}).join('')}
   catch(e){box.innerHTML=''}}
+// 谁起的这次运行。**空不等于定时**——原来这里写的是 `r.by||'⏰ 定时'`，
+// 于是所有没记来源的运行都被贴上"定时"的标签，而那里面混着管家代跑的
+// 和测试跑的（平台真机上分别是 17 条和 265 条）。
+// 平台侧已经让调度器显式记 "schedule"；这里照着翻，翻不出来就
+// 如实说"来源没记"——**别把"不知道"说成一个具体答案**。
+function byLabel(by){
+  const v=(by||'').trim();
+  if(!v)return '来源没记';
+  if(v==='schedule')return '⏰ 定时';
+  if(v==='schedule_manual')return '⏰ 手动补跑';
+  return v;                       // 其余是用户名，原样显示
+}
 async function rerunRun(id,btn,ev){ev.stopPropagation();btn.disabled=true;btn.textContent='重跑中…';
   try{const r=await api('/api/workflow/rerun',{run_id:id});
     btn.textContent=r.status==='succeeded'?'✓ 成功':(r.status==='failed'?'✕ 又失败':'… 运行中')}
