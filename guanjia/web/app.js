@@ -147,7 +147,13 @@ async function loadOverview(){loadPlatform();loadHealth();try{const d=await api(
   $('ov-failures').innerHTML=d.recent_failures.map(f=>`<div class="line-item"><b>${esc(f.workflow)}</b>
     <span class="sub2">${esc(f.error||'').slice(0,60)}</span>
     <span class="right">${f.count>1?'同样的毛病 '+f.count+' 次，最近一次 ':'最近一次 '}${esc(fmtWhen(f.at))} · run ${esc(f.run_id)}</span></div>`).join('')
-    ||'<div class="line-item sub2">近期没有失败 🎉</div>'}
+    ||'<div class="line-item sub2">近期没有失败 🎉</div>';
+  // 截了就说一句：几行很容易被读成"就这些"，而第 N 种可能才是要命的那个。
+  // 老远端没有 recent_failures_total 时保守处理，判不出来就不吭声。
+  const shownFails=(d.recent_failures||[]).length;
+  const allFails=(typeof d.recent_failures_total==='number')?d.recent_failures_total:shownFails;
+  if(allFails>shownFails){$('ov-failures').innerHTML+=
+    '<div class="line-item sub2">还有 '+(allFails-shownFails)+' 种别的毛病没列出来</div>'}}
   catch(e){$('ov-stats').innerHTML='<div class="stat bad"><div class="num">!</div><div class="lbl">'+esc(e.message)+'</div></div>'}}
 
 // 2026-08-28T10:03:36+00:00 → 08-28 10:03

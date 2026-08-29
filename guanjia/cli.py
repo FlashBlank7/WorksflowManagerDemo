@@ -346,11 +346,14 @@ def main() -> None:
                           f"（最近触发 {sch.get('last_fire_date') or '—'}）{N}")
                 if d["recent_failures"]:
                     print(f"  {D}最近的失败：{N}")   # 不是今天的，别让上面那行带偏
-                from .failures import summarize
+                from .failures import more_kinds_note, summarize
                 for f in d["recent_failures"][:3]:
                     head, tail = summarize(f)
                     print(f"  {R}✕ {head}{N}")
                     print(f"      {D}{tail}{N}")
+                note = more_kinds_note(d, shown=3)
+                if note:
+                    print(f"  {D}{note}{N}")
             except RemoteError as error:
                 print(f"{R}{error}{N}")
             continue

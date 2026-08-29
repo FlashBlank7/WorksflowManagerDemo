@@ -91,11 +91,14 @@ def main() -> None:
         if d["recent_failures"]:
             # 这一栏是「最近」不是「今天」——顶上写着今日运行，不说清楚会被当成今天的
             print("  最近的失败：")
-        from .failures import summarize
+        from .failures import summarize, more_kinds_note
         for f in d["recent_failures"][:5]:
             head, tail = summarize(f)
             print(f"  ✕ {head}")
             print(f"      {tail}")
+        note = more_kinds_note(d, shown=5)
+        if note:
+            print(f"  {note}")
         if d["recent_failures"]:
             print("  （想知道为什么失败：guanjia 里问「run <编号> 为什么失败」）")
         try:

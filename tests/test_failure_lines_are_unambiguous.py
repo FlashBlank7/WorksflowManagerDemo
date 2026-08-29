@@ -119,5 +119,76 @@ class EveryExitUsesItTest(unittest.TestCase):
         self.assertNotIn("2026-08-28T10:03:36", out)
 
 
+
+class TruncationIsAnnouncedTest(unittest.TestCase):
+    """列表截了就要说——本周第四次同一个形状：给一页、不说这是一页。
+
+    面板一屏只放得下几行，"几行"很容易被读成"就这些"，
+    而第 6 种毛病可能才是要命的那个。
+    """
+
+    def _overview(self, shown_rows, total=None):
+        d = {"recent_failures": [dict(REAL) for _ in range(shown_rows)]}
+        if total is not None:
+            d["recent_failures_total"] = total
+        return d
+
+    def test_it_says_how_many_kinds_are_hidden(self):
+        from guanjia.failures import more_kinds_note
+
+        note = more_kinds_note(self._overview(8, total=20), shown=5)
+        self.assertIn("15", note)          # 20 种，屏幕上 5 种
+
+    def test_it_counts_from_what_is_on_screen_not_what_arrived(self):
+        """远端给了 8 条、屏幕只放 5 条——藏起来的是 15 不是 12。"""
+        from guanjia.failures import more_kinds_note
+
+        self.assertIn("15", more_kinds_note(self._overview(8, total=20), shown=5))
+
+    def test_nothing_is_said_when_nothing_is_hidden(self):
+        from guanjia.failures import more_kinds_note
+
+        self.assertEqual(more_kinds_note(self._overview(3, total=3), shown=5), "")
+
+    def test_an_old_backend_without_the_total_does_not_lie(self):
+        """老远端没有这个字段：宁可不说，也不能谎报"没有更多"。
+
+        但手里这批本身超出屏幕时，那部分还是要说。
+        """
+        from guanjia.failures import more_kinds_note
+
+        self.assertEqual(more_kinds_note(self._overview(3), shown=5), "")
+        self.assertIn("3", more_kinds_note(self._overview(8), shown=5))
+
+    def test_the_today_command_prints_it(self):
+        from guanjia import __main__ as entry
+
+        overview = {
+            "runs_today": {"total": 1, "succeeded": 1, "failed": 0, "running": 0},
+            "published_workflows": 3, "builds_active": 0,
+            "week": [], "schedules": [],
+            "recent_failures": [dict(REAL) for _ in range(8)],
+            "recent_failures_total": 20,
+        }
+
+        class Fake:
+            def __init__(self, *a, **k):
+                pass
+
+            def request(self, method, path, **kw):
+                if path.endswith("/overview"):
+                    return overview
+                from guanjia.remote import RemoteError
+                raise RemoteError(404, "没有这个端点")
+
+        buf = io.StringIO()
+        with patch("guanjia.remote.RemoteClient", Fake), \
+             patch("guanjia.config.load_config",
+                   lambda *a, **k: {"server": "http://x", "token": "t", "user": "me"}), \
+             patch.object(entry.sys, "argv", ["guanjia", "today"]), \
+             redirect_stdout(buf):
+            entry.main()
+        self.assertIn("还有 15 种", buf.getvalue())
+
 if __name__ == "__main__":
     unittest.main()

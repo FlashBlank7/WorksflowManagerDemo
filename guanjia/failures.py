@@ -48,3 +48,22 @@ def summarize(failure: dict) -> tuple[str, str]:
     if run_id:
         tail += f" · run {run_id}"
     return head, tail
+
+
+def more_kinds_note(overview: dict, *, shown: int) -> str:
+    """列表截了就说一句，没截就返回空串。
+
+    面板一屏只放得下几行，而"几行"很容易被读成"就这些"——
+    第 6 种毛病可能才是要命的那个。远端给了总数
+    （recent_failures_total）就照它说；老远端没有这个字段时，
+    只能拿手里这批的条数保守判断，判不出来就不吭声：
+    **宁可不说，也不能说错**，谎报"没有更多"比不提更糟。
+    """
+    rows = overview.get("recent_failures") or []
+    total = overview.get("recent_failures_total")
+    if not isinstance(total, int):
+        total = len(rows)          # 老远端：至少别把手里这批说漏了
+    hidden = total - min(shown, len(rows))
+    if hidden <= 0:
+        return ""
+    return f"（还有 {hidden} 种别的毛病没列出来）"
