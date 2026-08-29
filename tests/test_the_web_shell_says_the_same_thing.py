@@ -127,3 +127,48 @@ class TestTheWeekChartCountsInFlightRuns:
         nothing = _cell({"date": "2026-08-30", "ok": 0, "fail": 0, "other": 0})
         in_flight = _cell({"date": "2026-08-30", "ok": 0, "fail": 0, "other": 5})
         assert nothing != in_flight, (nothing, in_flight)
+
+
+class TestTheTimeFormatMatches:
+    """`_when`（Python）和 `fmtWhen`（JS）是同一条规则的两份实现。
+
+    核过：条件、切片、兜底词一字不差。钉住是因为这一族今天已经走样三次
+    （措辞、整数转换、趋势柱），不是因为现在有问题。
+    """
+
+    def test_python_formats_an_iso_timestamp(self):
+        from guanjia.failures import _when
+
+        assert _when("2026-08-28T10:03:36+00:00") == "08-28 10:03"
+
+    def test_python_falls_back_when_it_cannot_read_it(self):
+        from guanjia.failures import _when
+
+        assert _when("") == "时间不详"
+        assert _when("看不懂的东西") == "看不懂的东西"
+
+    def test_the_js_uses_the_same_slices_and_fallback(self):
+        assert "t.slice(5,10)+' '+t.slice(11,16)" in APP_JS
+        assert "t.length>=16&&t[4]==='-'&&(t[10]==='T'||t[10]===' ')" in APP_JS
+        assert "'时间不详'" in APP_JS
+
+
+class TestTheStatusMarksMatch:
+    """同一次运行在命令行和网页上不该是两个符号。"""
+
+    def test_every_cli_mark_appears_in_the_js_table(self):
+        from guanjia.runcmd import MARKS
+
+        table = APP_JS[APP_JS.index("const M={"):APP_JS.index("const M={") + 200]
+        for status, mark in MARKS.items():
+            assert f"{status}:[" in table, status
+            assert f"'{mark}'" in table, (status, mark)
+
+    def test_the_js_has_no_extra_status(self):
+        """反过来也核一遍：网页多认一个状态，命令行就会漏掉它。"""
+        from guanjia.runcmd import MARKS
+        import re as _re
+
+        table = APP_JS[APP_JS.index("const M={"):APP_JS.index("]};") + 3]
+        listed = set(_re.findall(r"(\w+):\[", table))
+        assert listed == set(MARKS), (listed ^ set(MARKS))
