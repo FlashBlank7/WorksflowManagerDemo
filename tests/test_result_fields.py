@@ -272,7 +272,6 @@ class RepoHygieneTest(unittest.TestCase):
     def test_template_links_point_at_files_that_exist(self):
         """模板里写死了仓库内路径，文件挪了就是死链。"""
         import re
-        from pathlib import Path as _P
 
         root = self._root()
         for path in (root / ".github/ISSUE_TEMPLATE").glob("*.yml"):

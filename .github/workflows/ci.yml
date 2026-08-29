@@ -37,8 +37,11 @@ jobs:
       # 只开 F 类（pyflakes）：算了没用的变量、没引用的导入、重复定义、
       # 假 f-string。这些是"代码在说谎"的信号，不是格式偏好。
       # 格式类规则（行宽之类）故意不开，那些是口味。
+      # scripts 和 tests 一起扫：scripts 里装的是冷路径自检、冒烟这些
+      # **用来验别人**的东西，它们自己坏了最没人发现；
+      # tests 里一个没人用的 import 往往是"这条断言后来被删了"的痕迹。
       - name: Ruff（只查真 bug 类）
-        run: ruff check guanjia --select F
+        run: ruff check guanjia scripts tests --select F
       - name: Pytest
         run: pytest tests/ -q
 

@@ -8,7 +8,6 @@
    下次按名字找就成了「有歧义，匹配到多个」。
 """
 import unittest
-from unittest.mock import MagicMock
 
 from guanjia.plugins import workflow
 
