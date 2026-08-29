@@ -33,8 +33,12 @@ def check_web_assets(cold: "Cold") -> None:
                    if shutil.which(name)), None)
     targets = [os.path.join(ROOT, "guanjia", "web", "app.js")]
     if engine is None:
-        print(f"  {DIM}· 网页壳 JS 语法：跳过（本机没有 node/deno/bun）"
-              f"{RESET}")
+        # 说清"谁在替它把关"。只写"跳过"的话，人会以为这项没人查——
+        # 于是要么白担心，要么反过来以为本地绿灯就等于查过了。
+        # 2026-08-29 就吃过后一种亏：app.js 里一个函数被插进 try 和 catch 之间，
+        # 本地全绿（这里跳过、Python 测试也管不着），全靠肉眼发现。
+        print(f"  {DIM}· 网页壳 JS 语法：本机没有 node/deno/bun，这项跳过；"
+              f"CI 的 javascript-syntax 会跑 node --check{RESET}")
         return
     for path in targets:
         name = f"网页壳 JS 语法（{engine}）"

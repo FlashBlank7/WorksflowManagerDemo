@@ -42,6 +42,32 @@ jobs:
       - name: Pytest
         run: pytest tests/ -q
 
+  # 网页壳的 JS 没有任何构建步骤，也就没有任何东西替它看语法。
+  # 2026-08-29 改 app.js 时，一个函数被插进了 try 和 catch 之间——
+  # Python 测试全绿、冷路径脚本也全绿（它自己会跳过："本机没有 node"），
+  # 全靠肉眼发现。而语法一坏，整个网页壳是白屏。
+  # 开发机上没有 node 是常态，CI 上有——那就在 CI 上把这道闸补上。
+  javascript-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: node --check 每个 .js
+        run: |
+          set -e
+          found=0
+          for file in $(find guanjia -name '*.js' -not -path '*/node_modules/*'); do
+            echo "  检查 $file"
+            node --check "$file"
+            found=$((found + 1))
+          done
+          # 一个都没找到就是路径写错了——那样这个 job 会一路绿灯却什么也没查
+          if [ "$found" -eq 0 ]; then
+            echo "一个 .js 都没找到，说明路径写错了" >&2
+            exit 1
+          fi
+          echo "共检查 $found 个文件"
+
   # 零依赖是这个项目的卖点之一（客户端不跑模型、不存业务数据）。
   # 卖点要有东西盯着，不然哪天悄悄多一个依赖也没人发现。
   no-dependencies:
