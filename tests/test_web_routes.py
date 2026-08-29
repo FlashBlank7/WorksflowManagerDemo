@@ -453,6 +453,23 @@ class AccessKeyTest(unittest.TestCase):
         self.assertIn(b"lg-prof", body)                 # 首页真的出来了
         self.assertIn("guanjia_key=secret-key-123", headers.get("Set-Cookie", ""))
 
+    def test_the_cookie_is_not_readable_from_javascript(self):
+        """页面从不读这个 Cookie（全仓没有一处 document.cookie），
+        所以 HttpOnly 是白捡的一道闸：页面里万一有个转义漏洞，
+        钥匙不至于被顺走——而它正是非回环绑定时唯一挡在门口的东西。"""
+        _, _, headers = self._raw("/?k=secret-key-123")
+        self.assertIn("HttpOnly", headers.get("Set-Cookie", ""))
+
+    def test_the_cookie_stays_same_site(self):
+        """别在加 HttpOnly 的时候把 SameSite 挤掉了。"""
+        _, _, headers = self._raw("/?k=secret-key-123")
+        self.assertIn("SameSite=Strict", headers.get("Set-Cookie", ""))
+
+    def test_the_cookie_alone_opens_it_next_time(self):
+        """反向：这道闸不能把正经用法挡了——第二次不带 ?k= 也要进得去。"""
+        status, _, _ = self._raw("/", headers={"Cookie": "guanjia_key=secret-key-123"})
+        self.assertEqual(status, 200)
+
     def test_a_prefix_of_the_key_is_rejected(self):
         """猜对前几位不算数——否则钥匙能一位一位试出来。
 

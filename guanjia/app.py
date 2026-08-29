@@ -152,9 +152,19 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _maybe_set_cookie(self) -> None:
+        """把钥匙记进 Cookie，省得每次都带 ?k=。
+
+        HttpOnly：页面自己**从来不读这个 Cookie**（全仓 grep 过，
+        没有一处 document.cookie），所以关掉 JS 读取是白捡的。
+        这道闸挡的是"页面里万一有个转义漏洞，钥匙被顺走"——
+        而这把钥匙正是非回环绑定时唯一挡在门口的东西。
+        Secure 不能加：这是本机 http，加了 Cookie 直接不生效。
+        """
         if Handler.access_key and getattr(self, "_key_from_url", False):
-            self.send_header("Set-Cookie",
-                             f"guanjia_key={Handler.access_key}; Path=/; SameSite=Strict")
+            self.send_header(
+                "Set-Cookie",
+                f"guanjia_key={Handler.access_key}; Path=/; "
+                "SameSite=Strict; HttpOnly")
 
     def do_GET(self) -> None:
         if not self._key_ok():
