@@ -120,7 +120,9 @@ being packaged for independent release.
 
 **Health check**: `guanjia doctor` names the workflows that are broken (all runs
 failed in the window, or a recent failure streak) or stalled (scheduled but never
-ran), each with the reason from its last failure. The same report shows up in
+ran), each with the reason from its last failure. It also calls out the ones that
+were **published but have never run** — they are not broken, but nothing yet shows
+they work, and "all healthy" cannot carry them. The same report shows up in
 `guanjia today`, the web dashboard, and in chat ("anything broken?").
 
 **Repair**: say "X is broken, fix it" in chat — the builder works **on the existing
