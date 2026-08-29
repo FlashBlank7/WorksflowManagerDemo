@@ -238,6 +238,11 @@ def login_flow(server_default: str, profile: str | None = None) -> RemoteClient:
     return RemoteClient(server, result["token"])
 
 
+# 「看一眼」类命令的超时。聊天要 120 秒（模型本来就慢），
+# 但 /today、/wf 这种拿一份现成数据的，等两分钟等于界面卡死。
+LOOK_TIMEOUT = 15.0
+
+
 def main() -> None:
     parser = ChineseArgumentParser(description="guanjia CLI — 工作流管家")
     parser.add_argument("--login", action="store_true")
@@ -337,10 +342,13 @@ def main() -> None:
             continue
         if text == "/today":
             try:
-                d = remote.request("GET", "/api/v1/overview")
+                # 看一眼的命令别用聊天那个 120 秒：后端卡住时，
+                # REPL 会整整两分钟一个字都不出，看着像死了。
+                d = remote.request("GET", "/api/v1/overview", timeout=LOOK_TIMEOUT)
                 health = None
                 try:
-                    health = remote.request("GET", "/api/v1/health-report")
+                    health = remote.request("GET", "/api/v1/health-report",
+                                            timeout=LOOK_TIMEOUT)
                 except RemoteError:
                     pass       # 老远端没有体检端点：不影响主体
                 from .overview_view import render

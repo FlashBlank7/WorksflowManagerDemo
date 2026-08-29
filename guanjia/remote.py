@@ -82,6 +82,35 @@ class RemoteAddressInvalid(RemoteUnreachable):
             f"要写成 http://主机:端口 这样的形式")
 
 
+def _looks_like_timeout(error: BaseException) -> bool:
+    """超时可能自己来，也可能被 URLError 包着来——两种都要认出来。
+
+    只判 isinstance(error, TimeoutError) 会漏掉后一种，
+    而后一种恰恰是最常见的（urllib 把 socket 超时包进 URLError.reason）。
+    """
+    if isinstance(error, TimeoutError):
+        return True
+    reason = getattr(error, "reason", None)
+    return isinstance(reason, TimeoutError) or "timed out" in str(reason).lower()
+
+
+class RemoteTimeout(RemoteUnreachable):
+    """**等超时了**——和"连不上"不是一回事，虽然都算不可达。
+
+    连不上是服务器不在（立刻拒绝）；超时是它在、只是不答。
+    两者的下一步不同：前者去确认启动没有，后者去看它是不是卡住了
+    （这个平台就出过一次启动时全表扫描跑 90 分钟，那期间所有请求都是这样）。
+    说成同一句"确认它启动了"，会把人支到错的方向——
+    仓里别处早就分过这种岔（少了码 vs 码不对、地址写歪 vs 连不上）。
+
+    继承 RemoteUnreachable：老的 except 分支照旧接得住，不会漏。
+    """
+
+    def __init__(self, server: str, seconds: float):
+        RemoteError.__init__(
+            self, 0, f"等了 {seconds:.0f} 秒 {server} 还没答复")
+
+
 def next_step(error: RemoteError, *, has_token: bool = True) -> str:
     """把一个远端错误翻成"所以你该做什么"。
 
@@ -100,6 +129,11 @@ def next_step(error: RemoteError, *, has_token: bool = True) -> str:
                 "  guanjia remote                     # 看当前档案里写的是什么\n"
                 "  guanjia remote add <名字> <地址>   # 换一个，形如 http://127.0.0.1:8000\n"
                 "  或者这一次直接带上 --server http://主机:端口")
+    if isinstance(error, RemoteTimeout):
+        # 它在，只是不答——"确认它启动了"这句对这种情况是错的方向
+        return ("后端在，但这次没答复。多半是它正忙或者卡住了：\n"
+                "  · 稍等一下重试；一直这样就去看后端日志\n"
+                "  · 想确认它还活着：guanjia doctor")
     if isinstance(error, RemoteUnreachable):
         return ("连不上后端。guanjia 是薄客户端，得有一个工作流平台在跑：\n"
                 "  · 已经部署过：确认它启动了、地址端口没写错（guanjia remote）\n"
@@ -147,7 +181,14 @@ class RemoteClient:
         self.token = token
         self.timeout = timeout
 
-    def request(self, method: str, path: str, body: dict | None = None) -> Any:
+    def request(self, method: str, path: str, body: dict | None = None,
+                *, timeout: float | None = None) -> Any:
+        """timeout 可以按次覆盖。
+
+        REPL 里那个客户端的默认是 120 秒——聊天要那么久，
+        但 /today、/wf 这类"看一眼"的命令等两分钟就是整个界面卡死、
+        一个字都不出。信息类的命令自己传个短的。
+        """
         # Request(...) 也要在 try 里面：地址写歪时它抛的是 ValueError
         # （Invalid IPv6 URL / unknown url type），而它原先在 try **外面**，
         # 于是这个最平常的用户失误一路裸奔到顶层，被印成
@@ -162,12 +203,15 @@ class RemoteClient:
                     "Content-Type": "application/json",
                 },
             )
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(
+                    request, timeout=timeout or self.timeout) as response:
                 text = response.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as error:
             raise RemoteError(error.code, error.read().decode("utf-8", errors="replace")) from error
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             # HTTPError 是 URLError 的子类，所以这一支必须排在它后面
+            if _looks_like_timeout(error):
+                raise RemoteTimeout(self.server, timeout or self.timeout) from error
             raise RemoteUnreachable(self.server, getattr(error, "reason", error)) from error
         except ValueError as error:
             raise RemoteAddressInvalid(self.server, error) from error
