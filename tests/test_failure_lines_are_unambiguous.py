@@ -192,3 +192,26 @@ class TruncationIsAnnouncedTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestALongReasonSaysItWasCut:
+    """一行放不下就截，但**干净地砍掉**会让人分不出这是全文还是半截话。
+
+    平台那边同一天修的是同一个毛病（_brief_error 干净地砍在 110 字）——
+    这条线上最能照着做的一句常常在末尾，砍在中间的人只看到半句。
+    """
+
+    def test_a_long_reason_ends_with_an_ellipsis(self):
+        head, _ = summarize({"workflow": "日报", "error": "取不到「x」的产出" + "补" * 200})
+        assert head.endswith("…"), head[-30:]
+
+    def test_a_short_reason_is_left_alone(self):
+        """反向：不能给每条都缀个省略号。"""
+        head, _ = summarize({"workflow": "日报", "error": "缺少必填输入「text」"})
+        assert not head.endswith("…")
+        assert "缺少必填输入「text」" in head
+
+    def test_the_workflow_name_is_never_the_part_that_gets_cut(self):
+        """截的是原因，不是名字——名字没了就不知道是谁出事。"""
+        head, _ = summarize({"workflow": "很长的工作流名字统计报表", "error": "错" * 300})
+        assert head.startswith("很长的工作流名字统计报表")

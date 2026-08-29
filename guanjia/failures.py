@@ -35,7 +35,10 @@ def summarize(failure: dict) -> tuple[str, str]:
     """
     workflow = str(failure.get("workflow") or "某个工作流")
     error = str(failure.get("error") or "").strip() or "没有留下原因"
-    head = f"{workflow}  {error[:60]}"
+    # 截了要说。这一行放不下长报错，但**干净地砍掉**会让人分不出
+    # 这是全文还是半截话——而这条线上最能照着做的一句常常在末尾
+    # （平台那边 2026-08-30 也是同一个毛病，同一天一起修的）。
+    head = f"{workflow}  {error if len(error) <= 60 else error[:60] + '…'}"
 
     count = failure.get("count") or 1
     try:
