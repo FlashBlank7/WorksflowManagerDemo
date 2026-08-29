@@ -338,22 +338,22 @@ def main() -> None:
         if text == "/today":
             try:
                 d = remote.request("GET", "/api/v1/overview")
-                rt = d["runs_today"]
-                say(f"今日运行 {rt['total']}（✓{rt['succeeded']} ✕{rt['failed']} 进行中{rt['running']}）· "
-                    f"已发布 {d['published_workflows']} · 生成中 {d['builds_active']}")
-                for sch in d["schedules"]:
-                    print(f"  {D}⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}"
-                          f"（最近触发 {sch.get('last_fire_date') or '—'}）{N}")
-                if d["recent_failures"]:
-                    print(f"  {D}最近的失败：{N}")   # 不是今天的，别让上面那行带偏
-                from .failures import more_kinds_note, summarize
-                for f in d["recent_failures"][:3]:
-                    head, tail = summarize(f)
-                    print(f"  {R}✕ {head}{N}")
-                    print(f"      {D}{tail}{N}")
-                note = more_kinds_note(d, shown=3)
-                if note:
-                    print(f"  {D}{note}{N}")
+                health = None
+                try:
+                    health = remote.request("GET", "/api/v1/health-report")
+                except RemoteError:
+                    pass       # 老远端没有体检端点：不影响主体
+                from .overview_view import render
+                # 和 `guanjia today` 用同一份渲染，只是屏幕短、失败列 3 条。
+                # 两处各写各的时这里少了近 7 日趋势条和体检那几行——
+                # 招牌那条路反而看得最少。
+                for style, line in render(d, failures_shown=3, health=health):
+                    if not style:
+                        say(line)
+                    elif style == "bad":
+                        print(f"{R}{line}{N}")
+                    else:
+                        print(f"{D}{line}{N}")
             except RemoteError as error:
                 print(f"{R}{error}{N}")
             continue

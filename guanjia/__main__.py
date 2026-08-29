@@ -89,49 +89,15 @@ def main() -> None:
         except RemoteError as error:
             print(f"{error}\n{next_step(error, has_token=bool(cfg['token']))}")
             sys.exit(1)
-        rt = d["runs_today"]
-        running = rt.get("running", 0)
-        print(f"今日运行 {rt['total']}（✓{rt['succeeded']} ✕{rt['failed']}"
-              + (f" ⋯{running}" if running else "") + "）· "
-              f"已发布 {d['published_workflows']} · 生成中 {d['builds_active']}")
-        week = d.get("week") or []
-        if week:
-            def _cell(day):
-                other = day.get("other", 0)
-                total = day["ok"] + day["fail"] + other
-                if not total:
-                    return "·"
-                if not day["ok"] and not day["fail"]:
-                    return "○"          # 跑了但都没出结果（排队/进行中/暂停）
-                if day["fail"] > day["ok"]:
-                    return "✕"
-                return "△" if day["fail"] else "✓"
-            print("  近7日 " + " ".join(f"{w['date'][5:]}{_cell(w)}" for w in week)
-                  + "  （✓全成 △有失败 ✕失败居多 ○未出结果 ·无运行）")
-        for sch in d["schedules"]:
-            print(f"  ⏰ {sch['workflow']} 每天 {sch['at']} {sch['timezone']}")
-        if d["recent_failures"]:
-            # 这一栏是「最近」不是「今天」——顶上写着今日运行，不说清楚会被当成今天的
-            print("  最近的失败：")
-        from .failures import summarize, more_kinds_note
-        for f in d["recent_failures"][:5]:
-            head, tail = summarize(f)
-            print(f"  ✕ {head}")
-            print(f"      {tail}")
-        note = more_kinds_note(d, shown=5)
-        if note:
-            print(f"  {note}")
-        if d["recent_failures"]:
-            print("  （想知道为什么失败：guanjia 里问「run <编号> 为什么失败」）")
+        health = None
         try:
-            report = RemoteClient(cfg["server"], cfg["token"]).request(
+            health = RemoteClient(cfg["server"], cfg["token"]).request(
                 "GET", "/api/v1/health-report")
-            bad = [i for i in report.get("items", []) if i.get("state") != "ok"]
-            for item in bad[:5]:
-                mark = "✕" if item["state"] == "broken" else "⏸"
-                print(f"  {mark} {item['workflow']}：{item['reason']}")
         except RemoteError:
             pass  # 老远端没有体检端点：不影响 today 主体
+        from .overview_view import render
+        for _style, line in render(d, failures_shown=5, health=health):
+            print(line)
         return
     if args and args[0] == "completion":
         from .completion import main as completion_main
