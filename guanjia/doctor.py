@@ -13,6 +13,7 @@ from . import sessions
 from .config import list_profiles, load_config
 from .remote import RemoteClient, RemoteError, RemoteUnreachable
 
+from .cut import clip
 from .palette import paint
 
 # 上色与否由 palette 统一判（NO_COLOR / 非终端 一律不上色）
@@ -132,7 +133,7 @@ def run(cfg: dict | None = None) -> int:
             print(f"{mark} 调度器在跑（{behind:.0f}s 前刚轮询过）"
                   if isinstance(behind, (int, float)) else f"{mark} 调度器在跑")
             if skipped:
-                print(f"  但有定时没能开火：{skipped[:160]}")
+                print(f"  但有定时没能开火：{clip(skipped, 160)}")
                 problems.append("有定时任务每轮都被跳过——"
                                 "看上面那条原因，多半是它的发布版或配置有问题")
         else:

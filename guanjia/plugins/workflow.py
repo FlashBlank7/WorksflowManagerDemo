@@ -7,6 +7,7 @@ import sys
 import time
 from datetime import datetime
 
+from ..cut import clip
 from ..remote import RemoteClient, RemoteError
 
 
@@ -226,7 +227,7 @@ def run_history(remote: RemoteClient, app_id: str, limit: int = 10) -> list[dict
         brief = ""
         for key, value in outputs.items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-            brief = f"{key} = {text[:80]}"
+            brief = f"{key} = {clip(text, 80)}"
             break
         items.append({
             "id": r.get("id"),

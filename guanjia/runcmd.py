@@ -14,6 +14,7 @@ import sys
 
 from .config import load_config
 from .plugins import workflow
+from .cut import clip
 from .remote import RemoteClient, RemoteError, next_step
 
 MARKS = {"succeeded": "✓", "failed": "✕", "cancelled": "⊘", "paused": "⏸",
@@ -176,9 +177,9 @@ def main(argv: list[str]) -> int:
         print(f"{mark} {target['name']} · {word} · run {result['run_id']}")
         for key, value in (result["outputs"] or {}).items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-            print(f"  {key} = {text[:500]}")
+            print(f"  {key} = {clip(text, 500)}")
         if result.get("error"):
-            print(f"  错误：{str(result['error'])[:300]}")
+            print(f"  错误：{clip(result['error'], 300)}")
         if result["status"] == "running":
             print(f"  超过 --wait {args.wait:.0f}s 还在跑；稍后可在 REPL 问「run {result['run_id']} 结果如何」")
         if result["status"] == "paused":
@@ -233,9 +234,9 @@ def _follow(remote: RemoteClient, target: dict, inputs: dict) -> int:
     print(f"{mark} {status}")
     for key, value in outputs.items():
         text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-        print(f"  {key} = {text[:500]}")
+        print(f"  {key} = {clip(text, 500)}")
     if error:
-        print(f"  错误：{error[:300]}")
+        print(f"  错误：{clip(error, 300)}")
     if status == "paused":
         node = (final.get("state") or {}).get("waiting_node_id") or "?"
         print(f"  等人工输入（节点 {node}）")
@@ -277,9 +278,9 @@ def rerun_main(argv: list[str]) -> int:
         print(f"{mark} {label}重跑 {run_id[:8]} → {word} · run {result['run_id']}")
         for key, value in (result["outputs"] or {}).items():
             text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-            print(f"  {key} = {text[:500]}")
+            print(f"  {key} = {clip(text, 500)}")
         if result.get("error"):
-            print(f"  错误：{str(result['error'])[:300]}")
+            print(f"  错误：{clip(result['error'], 300)}")
     return EXIT_CODES.get(result["status"], 3)
 
 

@@ -7,6 +7,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from .cut import clip
+
 
 def _readable(body: str) -> str:
     """后端回的正文里，把给人看的那句取出来。
@@ -220,7 +222,7 @@ class RemoteClient:
         except json.JSONDecodeError as error:
             # 200 但正文不是 JSON：多半是地址指错了（指到别的服务或反代的错误页）
             raise RemoteError(
-                200, f"返回的不是 JSON（对面可能不是 guanjia 平台）：{text[:120]}") from error
+                200, f"返回的不是 JSON（对面可能不是 guanjia 平台）：{clip(text, 120)}") from error
 
     def probe_stream(self, path: str) -> tuple[int, str]:
         """开一个 SSE 连接，看一眼状态和 Content-Type 就挂断，一个事件都不读。

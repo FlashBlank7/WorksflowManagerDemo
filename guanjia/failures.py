@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from .cut import clip
+
 
 def _when(at: str) -> str:
     """2026-08-28T10:03:36+00:00 → 08-28 10:03。读不动就原样返回。"""
@@ -38,7 +40,7 @@ def summarize(failure: dict) -> tuple[str, str]:
     # 截了要说。这一行放不下长报错，但**干净地砍掉**会让人分不出
     # 这是全文还是半截话——而这条线上最能照着做的一句常常在末尾
     # （平台那边 2026-08-30 也是同一个毛病，同一天一起修的）。
-    head = f"{workflow}  {error if len(error) <= 60 else error[:60] + '…'}"
+    head = f"{workflow}  {clip(error, 60)}"
 
     count = failure.get("count") or 1
     try:
