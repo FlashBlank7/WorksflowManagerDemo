@@ -453,6 +453,31 @@ class AccessKeyTest(unittest.TestCase):
         self.assertIn(b"lg-prof", body)                 # 首页真的出来了
         self.assertIn("guanjia_key=secret-key-123", headers.get("Set-Cookie", ""))
 
+    def test_a_prefix_of_the_key_is_rejected(self):
+        """猜对前几位不算数——否则钥匙能一位一位试出来。
+
+        2026-08-29 变异验证抓到的：把 compare_digest 换成
+        `access_key.startswith(given)`，**307 条测试全绿**。
+        原来的"错钥匙"用的是 wrong-guess，跟真钥匙一个字都不沾，
+        前缀比的实现照样把它拒了——**错得不够像的反例挡不住这种实现**。
+        （同一个形状同一天在平台的业主访问码上也中过一次。）
+        """
+        for guess in ("s", "secret", "secret-key-12"):
+            with self.subTest(guess=guess):
+                status, _, _ = self._raw(f"/?k={guess}")
+                self.assertEqual(status, 401, f"{guess!r} 被放进来了")
+
+    def test_a_key_with_the_right_start_but_extra_tail_is_rejected(self):
+        """反过来那半边：`given.startswith(key)` 写法的漏洞。"""
+        status, _, _ = self._raw("/?k=secret-key-123456")
+        self.assertEqual(status, 401)
+
+    def test_a_prefix_in_the_cookie_is_rejected_too(self):
+        """Cookie 是第二条入口，闸要铺满——只挡 URL 等于没挡。"""
+        status, _, _ = self._raw(
+            "/", headers={"Cookie": "guanjia_key=secret-key-12"})
+        self.assertEqual(status, 401)
+
     def test_non_ascii_key_is_rejected_not_reset(self):
         """compare_digest 对非 ASCII 字符串抛 TypeError——它在鉴权路径上，
         抛出去就是连接被重置（curl 52），而不是干净的 401。"""
