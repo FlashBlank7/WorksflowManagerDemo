@@ -30,10 +30,33 @@ class NextStepTest(unittest.TestCase):
         self.assertNotIn("remote", message)
 
     def test_expired_session_says_log_in_not_deploy(self):
-        for status in (401, 403):
-            step = next_step(RemoteError(status, "令牌不对或已失效——重新登录一次"))
-            self.assertIn("--login", step)
-            self.assertNotIn("部署", step)
+        step = next_step(RemoteError(401, "令牌不对或已失效——重新登录一次"))
+        self.assertIn("--login", step)
+        self.assertNotIn("部署", step)
+
+    def test_a_permission_wall_is_not_called_an_expired_session(self):
+        """403 和 401 是两件事，原来合在一起说"重新登录"。
+
+        平台的 403 是「这一步只有管理员能做——找这套平台的管理员帮忙」：
+        **登录是好的，权限不够**。让他再登一次同一个账号只会撞同一堵墙。
+        建议给错方向比不给更糟——doctor 那边早就为同一条道理分过岔
+        （"还没登录" vs "令牌失效"）。
+        """
+        step = next_step(RemoteError(403, "这一步只有管理员能做——找这套平台的管理员帮忙"))
+        self.assertIn("权限", step)
+        self.assertNotIn("重新登录：guanjia --login", step)
+        self.assertNotIn("失效", step)
+
+    def test_a_403_before_logging_in_gets_the_first_run_guide(self):
+        """没登录就撞 403 的人，缺的和撞 401 的人是同一步——给完整那份。
+
+        （拆 401/403 时我给 403 单写了一句短的，
+        test_first_run_message 里那条当场变红。测试是对的：
+        第一次用的人要的是完整流程，不是一句 --login。）
+        """
+        step = next_step(RemoteError(403, "需要身份"), has_token=False)
+        self.assertIn("还没登录过", step)
+        self.assertIn("找部署这套平台的人要", step)
 
     def test_missing_endpoint_points_at_version_drift(self):
         step = next_step(RemoteError(404, "Not Found"))
