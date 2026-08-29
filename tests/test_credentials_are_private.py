@@ -57,6 +57,67 @@ class ConfigIsPrivateTest(unittest.TestCase):
         self.assertEqual(_mode(target), 0o600)
 
 
+class OldLooseFilesGetTightenedTest(unittest.TestCase):
+    """光在"写"的时候收是不够的。
+
+    这次改动之前登录过的人，配置文件是 0644；他只要不再改配置，
+    就永远走不到 _write，那份令牌一直躺在那儿给同机所有人读。
+    老文件名 .bench.json 更彻底：只读不写，永远收不到。
+
+    所以读的时候也收。这是我们自己建的文件，收它不算越权。
+    """
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        self._env = patch.dict(os.environ, {"HOME": str(self.home)})
+        self._env.start()
+        self.addCleanup(self._env.stop)
+        self.assertEqual(Path.home(), self.home, "这套测试要靠 HOME 真被改掉")
+
+    def _loose(self, name: str) -> Path:
+        path = self.home / name
+        path.write_text(json.dumps({"server": "http://x", "token": "老令牌"}),
+                        encoding="utf-8")
+        path.chmod(0o644)
+        return path
+
+    def test_just_reading_the_config_tightens_it(self):
+        from guanjia import config
+
+        path = self._loose(".guanjia.json")
+        self.assertEqual(config.load_config()["token"], "老令牌", "得真读到了才算")
+        self.assertEqual(_mode(path), 0o600, oct(_mode(path)))
+
+    def test_the_old_filename_is_tightened_too(self):
+        """.bench.json 我们只读不写，不在读这一侧收就永远收不到。"""
+        from guanjia import config
+
+        path = self._loose(".bench.json")
+        self.assertEqual(config.load_config()["token"], "老令牌")
+        self.assertEqual(_mode(path), 0o600, oct(_mode(path)))
+
+    def test_a_broken_config_is_tightened_before_it_is_given_up_on(self):
+        """坏 JSON 当空处理——但里面照样可能有半截令牌，权限还是得收。"""
+        from guanjia import config
+
+        path = self.home / ".guanjia.json"
+        path.write_text('{"token": "半截', encoding="utf-8")
+        path.chmod(0o644)
+        config.load_config()
+        self.assertEqual(_mode(path), 0o600, oct(_mode(path)))
+
+    def test_a_stricter_choice_is_left_alone(self):
+        """0400 比 0600 还严，可能是用户故意的——别替他放宽。"""
+        from guanjia import config
+
+        path = self._loose(".guanjia.json")
+        path.chmod(0o400)
+        config.load_config()
+        self.assertEqual(_mode(path), 0o400, oct(_mode(path)))
+
+
 class SessionsArePrivateTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()

@@ -21,6 +21,7 @@ def _read_raw() -> dict:
     for name in (".guanjia.json", ".bench.json"):  # 老文件名兼容读
         path = Path.home() / name
         if path.is_file():
+            _private(path)  # 见 _private：读的时候也收，不然老文件永远松着
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
             except Exception:  # noqa: BLE001 - 坏配置当空处理，别拦住启动
@@ -50,11 +51,19 @@ def _private(path: Path) -> None:
     这台机器上还有别的用户，谁都能读走令牌、以你的身份操作平台。
     umask 默认 022，所以不显式收就是 644。
 
-    收不动就算了（比如挂在不支持权限的文件系统上）——
+    **写的时候收不够**：第一版只挂在 _write 上，于是这次改动之前
+    已经登录过的人，只要不再改配置，那份 0644 的令牌就一直躺着。
+    老文件名 .bench.json 更彻底——我们只读它、从不写它，永远收不到。
+    所以读的时候也收：这是我们自己建的文件，收它不算越权
+    （.env 是用户自己建的，那边只提醒不动手）。
+
+    已经比 0600 更严的（比如 0400）不动它——用户可能是故意的。
+    收不动也就算了（比如挂在不支持权限的文件系统上）：
     存不下配置比权限松更糟。
     """
     try:
-        path.chmod(0o600)
+        if os.stat(path).st_mode & 0o077:
+            path.chmod(0o600)
     except OSError:
         pass
 
