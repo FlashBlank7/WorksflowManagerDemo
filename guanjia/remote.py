@@ -57,6 +57,31 @@ class RemoteUnreachable(RemoteError):
         super().__init__(0, f"连不上 {server}：{reason}")
 
 
+class RemoteAddressInvalid(RemoteUnreachable):
+    """服务器地址本身就不成立——还没轮到"连得上连不上"。
+
+    2026-08-29 实测：`guanjia doctor --server 'http://[bad'` 打出
+
+        出了意料之外的问题：Invalid IPv6 URL
+        哪里不对可以自查：guanjia doctor
+
+    两句都不对：地址写错是**最平常**的用户失误，不是"意料之外"；
+    而它给出的下一步是"运行 guanjia doctor"——用户刚运行的就是它，
+    这是个死圈。原因是 urllib.request.Request(...) 在 try 外面，
+    它抛的 ValueError（unknown url type / Invalid IPv6 URL）
+    不在捕获的那几类里。
+
+    做成 RemoteUnreachable 的子类：各处已经写好的
+    `except RemoteUnreachable` 一个都不用改就能接住它。
+    """
+
+    def __init__(self, server: str, reason: object):
+        RemoteError.__init__(
+            self, 0,
+            f"服务器地址不对：{server or '（空）'}（{reason}）。"
+            f"要写成 http://主机:端口 这样的形式")
+
+
 def next_step(error: RemoteError, *, has_token: bool = True) -> str:
     """把一个远端错误翻成"所以你该做什么"。
 
@@ -68,6 +93,13 @@ def next_step(error: RemoteError, *, has_token: bool = True) -> str:
     「登录态失效了，重新登录」——他一次都还没登录过，
     这句话既说不通，也没告诉他第一步该干什么。
     """
+    if isinstance(error, RemoteAddressInvalid):
+        # 地址写歪的人不需要"确认后端启动了"——他需要改地址。
+        # 分岔的意义就在这儿：给连不上的人的那三条对他一条都不适用。
+        return ("改一下服务器地址：\n"
+                "  guanjia remote                     # 看当前档案里写的是什么\n"
+                "  guanjia remote add <名字> <地址>   # 换一个，形如 http://127.0.0.1:8000\n"
+                "  或者这一次直接带上 --server http://主机:端口")
     if isinstance(error, RemoteUnreachable):
         return ("连不上后端。guanjia 是薄客户端，得有一个工作流平台在跑：\n"
                 "  · 已经部署过：确认它启动了、地址端口没写错（guanjia remote）\n"
@@ -104,16 +136,20 @@ class RemoteClient:
         self.timeout = timeout
 
     def request(self, method: str, path: str, body: dict | None = None) -> Any:
-        request = urllib.request.Request(
-            f"{self.server}{path}",
-            method=method,
-            data=json.dumps(body).encode("utf-8") if body is not None else None,
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json",
-            },
-        )
+        # Request(...) 也要在 try 里面：地址写歪时它抛的是 ValueError
+        # （Invalid IPv6 URL / unknown url type），而它原先在 try **外面**，
+        # 于是这个最平常的用户失误一路裸奔到顶层，被印成
+        # 「出了意料之外的问题：Invalid IPv6 URL」。
         try:
+            request = urllib.request.Request(
+                f"{self.server}{path}",
+                method=method,
+                data=json.dumps(body).encode("utf-8") if body is not None else None,
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "Content-Type": "application/json",
+                },
+            )
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 text = response.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as error:
@@ -121,6 +157,8 @@ class RemoteClient:
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             # HTTPError 是 URLError 的子类，所以这一支必须排在它后面
             raise RemoteUnreachable(self.server, getattr(error, "reason", error)) from error
+        except ValueError as error:
+            raise RemoteAddressInvalid(self.server, error) from error
         try:
             return json.loads(text)
         except json.JSONDecodeError as error:

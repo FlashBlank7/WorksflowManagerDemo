@@ -39,8 +39,11 @@ def _scheduler_health(cfg: dict) -> tuple[dict | None, str]:
         return None, "连不上远端"
 
 
-def run() -> int:
-    cfg = load_config()
+def run(cfg: dict | None = None) -> int:
+    # cfg 由调用方传进来，是为了让 `guanjia doctor --server 别的机器` 真的
+    # 查那台机器。以前这里硬调 load_config()，命令行上写的地址被默默吞掉，
+    # 于是"自诊断"诊断的是另一台机器——诊断工具给错对象比不给更糟。
+    cfg = cfg if cfg is not None else load_config()
     _, profiles = list_profiles()
     problems: list[str] = []
 

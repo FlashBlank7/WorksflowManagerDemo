@@ -44,6 +44,27 @@ KNOWN_COMMANDS = frozenset({
 })
 
 
+def _connection_args(prog: str, argv: list[str]) -> dict:
+    """解析 --server / --token / --profile，别的参数一律拒绝。
+
+    2026-08-29 实测：`guanjia today --server http://别的机器` **一声不吭**地
+    照旧查了本机——today 和 doctor 那两条分支压根不解析参数，
+    用户敲什么都被默默吞掉。于是屏幕上是一份看起来正常的报表，
+    而它来自另一台机器。**默默忽略比直接报错糟得多**：
+    报错用户会改，忽略他不会知道。
+    （run / rerun / export 早就会说「不认识这些参数」，
+      只有这两条分支漏了——又是同一个闸没装满出口。）
+    """
+    from .argparse_zh import ChineseArgumentParser
+
+    parser = ChineseArgumentParser(prog=prog, description="连接参数")
+    parser.add_argument("--server", help="后端地址（不给就用当前档案里的）")
+    parser.add_argument("--token", help="访问令牌（不给就用当前档案里的）")
+    parser.add_argument("--profile", help="用哪个远端档案")
+    parsed = parser.parse_args(argv)
+    return {"server": parsed.server, "token": parsed.token, "profile": parsed.profile}
+
+
 def main() -> None:
     args = sys.argv[1:]
     if args and args[0] in ("-h", "--help", "help"):
@@ -61,7 +82,7 @@ def main() -> None:
     if args and args[0] == "today":
         from .config import load_config
         from .remote import RemoteClient, RemoteError, next_step
-        cfg = load_config()
+        cfg = load_config(**_connection_args("guanjia today", args[1:]))
         try:
             d = RemoteClient(cfg["server"], cfg["token"]).request("GET", "/api/v1/overview")
         except RemoteError as error:
@@ -135,12 +156,14 @@ def main() -> None:
         from .runcmd import import_main
         sys.exit(import_main(args[1:]))
     if args and args[0] == "doctor":
+        from .config import load_config
+        rest = [a for a in args[1:] if a != "--contract"]
+        cfg = load_config(**_connection_args("guanjia doctor", rest))
         if "--contract" in args[1:]:
-            from .config import load_config
             from .contract import run as contract_run
-            sys.exit(contract_run(load_config()))
+            sys.exit(contract_run(cfg))
         from .doctor import run as doctor_run
-        sys.exit(doctor_run())
+        sys.exit(doctor_run(cfg))
     if args and args[0] == "remote":
         from .config import drop_profile, list_profiles, use_profile
         sub = args[1] if len(args) > 1 else "list"
