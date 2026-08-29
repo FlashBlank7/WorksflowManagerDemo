@@ -111,6 +111,11 @@ def main(argv: list[str]) -> int:
         schema = workflow.input_schema(remote, target["id"])
     except RemoteError:
         pass
+    except workflow.UnknownWorkflowShape as error:
+        # 读不懂这张图的入口——照发请求，让服务端去判，但**说一声**。
+        # 不拦：我们并不知道它一定会失败，拦下来等于凭猜测挡住一次正当调用。
+        # 也不闷着：失败时那句"缺少必填输入 xxx"才不至于来得莫名其妙。
+        print(f"（读不出这个工作流要填什么：{error}）", file=sys.stderr)
     types = {field["name"]: field.get("type") for field in schema}
 
     inputs: dict = {}

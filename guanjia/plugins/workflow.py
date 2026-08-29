@@ -64,6 +64,10 @@ def build_status(remote: RemoteClient, build_id: str) -> dict:
     }
 
 
+class UnknownWorkflowShape(RuntimeError):
+    """图里找不到入口节点——不是"没有输入"，是"读不懂"。"""
+
+
 class InputTypeError(ValueError):
     """输入值与声明类型不符——要让用户看见并改，不能静默丢键。"""
 
@@ -96,10 +100,24 @@ def coerce_input(raw: str, declared_type: str | None) -> object:
     return raw
 
 
+# 工作流的入口节点有三种，不是只有 start。
+#
+# 平台自己的校验器写得很清楚：
+#   "workflow must contain exactly one start or schedule_trigger node"
+# 认的是 {start, schedule_trigger, event_subscription_trigger}，
+# 而且 schedule_trigger 有自己的 inputs 字段（界面上叫「定时输入」）。
+#
+# 只认 start 的后果正是下面那句注释想避免的：定时工作流拿到的是"没有输入"，
+# 于是 guanjia run 既不提示、也不拦，直接发请求——服务端建一条在入口就失败的
+# 运行记录，永久留在历史里，还让体检以为这个工作流坏了。
+# （平台前端早就认 start 和 schedule_trigger 两种，客户端这边漏了。）
+ENTRY_NODE_TYPES = ("start", "schedule_trigger", "event_subscription_trigger")
+
+
 def input_schema(remote: RemoteClient, app_id: str) -> list[dict]:
     draft = remote.request("GET", f"/api/v1/applications/{app_id}/draft")
     for node in draft["snapshot"]["workflow"]["nodes"]:
-        if node.get("type") == "start":
+        if node.get("type") in ENTRY_NODE_TYPES:
             return [
                 {"name": i["name"], "label": i.get("label") or i["name"],
                  "type": i.get("type") or "string", "example": i.get("example", ""),
@@ -107,7 +125,13 @@ def input_schema(remote: RemoteClient, app_id: str) -> list[dict]:
                  "required": bool(i.get("required", True))}
                 for i in (node.get("config") or {}).get("inputs") or []
             ]
-    return []
+    # 一个入口节点都没找到：这和"入口节点没有输入"是两件事。
+    # 前者说明这张图我们读不懂（新的入口类型？快照坏了？），
+    # 而返回 [] 会让调用方以为"不用填任何东西"，照样把请求发出去。
+    raise UnknownWorkflowShape(
+        "这个工作流没有能识别的入口节点（认得的是："
+        + "、".join(ENTRY_NODE_TYPES)
+        + "）——多半是后端比客户端新。先在网页上跑一次，或升级 guanjia。")
 
 
 TERMINAL_STATUSES = ("succeeded", "failed", "paused", "cancelled")
