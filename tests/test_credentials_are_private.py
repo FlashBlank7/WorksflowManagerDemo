@@ -56,6 +56,94 @@ class ConfigIsPrivateTest(unittest.TestCase):
             config._write("default", {"default": {"token": "t"}})
         self.assertEqual(_mode(target), 0o600)
 
+    def test_it_is_never_group_readable_even_for_an_instant(self):
+        """"最后收成 0600"不够——中间那一小段也不能松。
+
+        原来是 write_text 建文件、再 chmod，中间文件已经带着令牌、
+        权限还是 0644。实测拿一个线程死盯着看，6103 次采样里
+        **8 次逮到 0644**——这台机器上确实还有别的用户。
+        现在用 os.open 带 0o600 建，一出生就是紧的。
+
+        测法要小心：**事后那道 chmod 会把结果补成 0600**，
+        所以光看最终权限，"建的时候是松的"照样绿（第一版就是这么写的，
+        变异验证时 0o666 的实现一条都没红）。
+        所以这里把 _private 停掉再看——验的是"建出来就是紧的"。
+        umask 设成 0（"什么都不收"）：按 umask 建的会是 0666，
+        按显式 mode 建的仍是 0600。
+        """
+        from guanjia import config
+
+        target = self.home / ".guanjia.json"
+        old_umask = os.umask(0)
+        try:
+            with patch.object(config, "_config_path", lambda: target), \
+                    patch.object(config, "_private", lambda path: None):
+                config._write("default", {"default": {"token": "secret"}})
+        finally:
+            os.umask(old_umask)
+        self.assertEqual(_mode(target), 0o600, f"建出来就是 {oct(_mode(target))}")
+        self.assertIn("secret", target.read_text(encoding="utf-8"),
+                      "前提：这个文件里确实有令牌")
+
+    def test_a_crash_midway_does_not_lose_the_saved_login(self):
+        """写到一半掉电，留下的必须还是**旧的完整配置**，不是半截。
+
+        原来是 write_text：先截断再写。崩在中间就留下一个残缺 json，
+        下次启动 _read_raw 把它当空配置吞掉（那儿是 except 全捕），
+        用户的登录就这么没了，而且没有任何提示。
+        """
+        from guanjia import config
+
+        target = self.home / ".guanjia.json"
+        with patch.object(config, "_config_path", lambda: target):
+            config._write("default", {"default": {"server": "http://old",
+                                                  "token": "old-token"}})
+
+            def boom(fd, data):
+                raise KeyboardInterrupt("拔电源")
+
+            with patch.object(os, "write", boom):
+                with self.assertRaises(KeyboardInterrupt):
+                    config._write("default", {"default": {"token": "new"}})
+
+        raw = json.loads(target.read_text(encoding="utf-8"))
+        self.assertEqual(raw["profiles"]["default"]["token"], "old-token")
+
+    def test_no_temp_file_is_left_behind(self):
+        """临时文件不能留在原地——那份也带着令牌，而且没人会去收拾它。"""
+        from guanjia import config
+
+        target = self.home / ".guanjia.json"
+        with patch.object(config, "_config_path", lambda: target):
+            config._write("default", {"default": {"token": "t"}})
+        leftovers = [p.name for p in self.home.iterdir() if p.name != ".guanjia.json"]
+        self.assertEqual(leftovers, [], f"剩下了 {leftovers}")
+
+    def test_when_the_temp_file_route_fails_it_still_saves_and_cleans_up(self):
+        """临时文件这条路走不通时的兜底：配置照样存下，且不留残渣。
+
+        这一条是**逼着走 except 那一支**才有意义——不逼的话，
+        兜底里的清理代码整段删掉，上面几条照样全绿（实测如此）。
+        存不下配置比权限松更糟，所以兜底必须真的能存下。
+        """
+        from guanjia import config
+
+        target = self.home / ".guanjia.json"
+        real_replace = os.replace
+
+        def fail(src, dst):
+            raise OSError("这个文件系统不支持换名")
+
+        with patch.object(config, "_config_path", lambda: target), \
+                patch.object(os, "replace", fail):
+            config._write("default", {"default": {"token": "fallback-token"}})
+        self.assertIs(os.replace, real_replace, "补丁没退干净")
+
+        self.assertIn("fallback-token", target.read_text(encoding="utf-8"))
+        self.assertEqual(_mode(target), 0o600)
+        leftovers = [p.name for p in self.home.iterdir() if p.name != ".guanjia.json"]
+        self.assertEqual(leftovers, [], f"兜底路径留下了 {leftovers}")
+
 
 class OldLooseFilesGetTightenedTest(unittest.TestCase):
     """光在"写"的时候收是不够的。

@@ -69,10 +69,39 @@ def _private(path: Path) -> None:
 
 
 def _write(active: str, profiles: dict) -> None:
+    """先写同目录的临时文件（一出生就是 0600），再原子换名过去。
+
+    两件事一起解决，都是量出来的，不是设想的：
+
+    1. **权限窗口**。原来是 write_text 之后再 chmod，中间那一小段
+       文件已经带着令牌、权限却还是 0644。实测拿一个线程死盯着看：
+       6103 次采样里 8 次逮到 0644。这台机器上确实还有别的用户。
+       用 os.open 带 0o600 建，就没有那一段。
+
+    2. **半截配置**。write_text 是先截断再写，写到一半掉电/被杀，
+       留下的是一个空的或残缺的 json——下次启动 _read_raw 把它当空配置
+       吞掉（那儿是 except 全捕），用户的登录**就这么没了**，
+       而且没有任何提示。换名是原子的：要么是旧的完整配置，要么是新的。
+    """
     path = _config_path()
-    path.write_text(
-        json.dumps({"active": active, "profiles": profiles}, ensure_ascii=False, indent=1),
-        encoding="utf-8")
+    payload = json.dumps({"active": active, "profiles": profiles},
+                         ensure_ascii=False, indent=1)
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, payload.encode("utf-8"))
+        finally:
+            os.close(fd)
+        os.replace(tmp, path)
+    except OSError:
+        # 临时文件这条路走不通（只读目录、怪文件系统……）就退回直写：
+        # **存不下配置比权限松更糟**，这是 _private 里已经定过的调子。
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        path.write_text(payload, encoding="utf-8")
     _private(path)
 
 
