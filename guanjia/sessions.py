@@ -10,13 +10,32 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from .config import write_private
+from .config import make_private, write_private
 
 DIR = Path.home() / ".guanjia" / "sessions"
 
 
 def _path(sid: str) -> Path:
     return DIR / f"{sid}.json"
+
+
+def _tighten_dir() -> None:
+    """会话目录收成 0700。**读的时候也收，不只是写的时候。**
+
+    配置那边已经学过这一课：只在写的路径上收权限，
+    这次改动之前就存在的文件永远收不到——用户只要不再新增会话，
+    那些 0644 的对话记录就一直躺着给同机所有人看。
+    会话比配置更容易只读不写（翻旧对话、`guanjia sessions` 列个清单）。
+
+    目录是真正的那道门：0700 之后别人根本进不来，
+    里面单个文件是什么权限都无所谓了。所以这一句最要紧。
+    收不动就算了——读不到会话比权限松更糟。
+    """
+    try:
+        if DIR.is_dir() and DIR.stat().st_mode & 0o077:
+            DIR.chmod(0o700)
+    except OSError:
+        pass
 
 
 def new_session() -> str:
@@ -34,10 +53,7 @@ def save(sid: str, messages: list[dict]) -> bool:
 
 def _save(sid: str, messages: list[dict]) -> bool:
     DIR.mkdir(parents=True, exist_ok=True)
-    try:  # 会话目录里是对话内容，同机其他用户不该看得到
-        DIR.chmod(0o700)
-    except OSError:
-        pass
+    _tighten_dir()      # 会话目录里是对话内容，同机其他用户不该看得到
     first_user = next((m for m in messages if m.get("role") == "user" and m.get("text")), None)
     # 和存令牌走同一份实现：一出生就 0600，写完换名过去。
     # 这里原来是 write_text 之后再 chmod——而 write_text 先截断，
@@ -57,6 +73,8 @@ def load(sid: str) -> dict | None:
     path = _path(sid)
     if not path.is_file():
         return None
+    _tighten_dir()
+    make_private(path)      # 老版本建的会话文件是 0644，读到才有机会收
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
@@ -64,6 +82,9 @@ def load(sid: str) -> dict | None:
 
 
 def list_sessions() -> list[dict]:
+    # 这里不用再收权限：下面每条都走 load，收在那儿了。
+    # （第一版在这儿也写了一句 _tighten_dir()，变异验证显示它是等价变异——
+    #  删掉一条测试都不红。看着像在把关、实际什么也没做的代码比没有更糟。）
     if not DIR.is_dir():
         return []
     items = []

@@ -21,7 +21,7 @@ def _read_raw() -> dict:
     for name in (".guanjia.json", ".bench.json"):  # 老文件名兼容读
         path = Path.home() / name
         if path.is_file():
-            _private(path)  # 见 _private：读的时候也收，不然老文件永远松着
+            make_private(path)  # 见 make_private：读的时候也收，不然老文件永远松着
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
             except Exception:  # noqa: BLE001 - 坏配置当空处理，别拦住启动
@@ -44,7 +44,7 @@ def _as_profiles(raw: dict) -> tuple[str, dict]:
     return "default", {}
 
 
-def _private(path: Path) -> None:
+def make_private(path: Path) -> None:
     """把文件权限收成 0600——只有自己能读。
 
     2026-08-29 实测：~/.guanjia.json 里存着 API 令牌，权限却是 0644。
@@ -100,13 +100,13 @@ def write_private(path: Path, text: str) -> None:
         os.replace(tmp, path)
     except OSError:
         # 临时文件这条路走不通（只读目录、怪文件系统……）就退回直写：
-        # **存不下比权限松更糟**，这是 _private 里已经定过的调子。
+        # **存不下比权限松更糟**，这是 make_private 里已经定过的调子。
         try:
             os.unlink(tmp)
         except OSError:
             pass
         path.write_text(text, encoding="utf-8")
-    _private(path)
+    make_private(path)
 
 
 def _write(active: str, profiles: dict) -> None:

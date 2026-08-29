@@ -67,7 +67,7 @@ class ConfigIsPrivateTest(unittest.TestCase):
         测法要小心：**事后那道 chmod 会把结果补成 0600**，
         所以光看最终权限，"建的时候是松的"照样绿（第一版就是这么写的，
         变异验证时 0o666 的实现一条都没红）。
-        所以这里把 _private 停掉再看——验的是"建出来就是紧的"。
+        所以这里把 make_private 停掉再看——验的是"建出来就是紧的"。
         umask 设成 0（"什么都不收"）：按 umask 建的会是 0666，
         按显式 mode 建的仍是 0600。
         """
@@ -77,7 +77,7 @@ class ConfigIsPrivateTest(unittest.TestCase):
         old_umask = os.umask(0)
         try:
             with patch.object(config, "_config_path", lambda: target), \
-                    patch.object(config, "_private", lambda path: None):
+                    patch.object(config, "make_private", lambda path: None):
                 config._write("default", {"default": {"token": "secret"}})
         finally:
             os.umask(old_umask)
@@ -253,6 +253,76 @@ class SessionsArePrivateTest(unittest.TestCase):
             back = sessions.load("abc123")
         self.assertIsNotNone(back, "上一次的对话被写坏了")
         self.assertIn("第一轮", json.dumps(back, ensure_ascii=False))
+
+    def test_old_loose_sessions_get_tightened_when_read(self):
+        """只在写的路径上收权限是不够的——配置那边已经学过这一课。
+
+        这次改动之前存下的对话是 0644、目录是 0755；用户只要不再新增会话
+        （翻旧对话、列个清单都只走读），那些记录就一直躺着给同机所有人看。
+        会话比配置更容易只读不写。
+
+        目录是真正的那道门：0700 之后别人根本进不来。
+        """
+        from guanjia import sessions
+
+        self.dir.mkdir(parents=True)
+        self.dir.chmod(0o755)
+        stale = self.dir / "old1.json"
+        stale.write_text(json.dumps({"id": "old1", "title": "旧对话",
+                                     "messages": [{"role": "user", "text": "机密"}]}),
+                         encoding="utf-8")
+        stale.chmod(0o644)
+
+        with patch.object(sessions, "DIR", self.dir):
+            self.assertIsNotNone(sessions.load("old1"), "得真读到了才算")
+        self.assertEqual(_mode(self.dir), 0o700, oct(_mode(self.dir)))
+        self.assertEqual(_mode(stale), 0o600, oct(_mode(stale)))
+
+    def test_a_stricter_directory_choice_is_left_alone(self):
+        """0500 比 0700 还严——和文件那边同一条规矩，别替他放宽。
+
+        少了这一条，把 `if DIR.is_dir() and DIR.stat().st_mode & 0o077:`
+        改成 `if DIR.is_dir():`（一律 chmod 0700）全绿——变异验证抓到的。
+        """
+        from guanjia import sessions
+
+        self.dir.mkdir(parents=True)
+        (self.dir / "a.json").write_text(
+            json.dumps({"id": "a", "title": "t", "updated_at": "2026-08-30 00:00"}),
+            encoding="utf-8")
+        self.dir.chmod(0o500)
+        with patch.object(sessions, "DIR", self.dir):
+            sessions.load("a")
+        self.assertEqual(_mode(self.dir), 0o500, oct(_mode(self.dir)))
+
+    def test_listing_alone_tightens_the_directory(self):
+        """列清单也是只读路径——最常走的那条，不能漏。
+
+        实现上是靠 list_sessions 里每条都走 load 顺带收的，
+        所以这条钉的是**路线**：不管内部怎么改，走这条路必须收到。
+        """
+        from guanjia import sessions
+
+        self.dir.mkdir(parents=True)
+        self.dir.chmod(0o755)
+        (self.dir / "a.json").write_text(
+            json.dumps({"id": "a", "title": "t", "updated_at": "2026-08-30 00:00"}),
+            encoding="utf-8")
+
+        with patch.object(sessions, "DIR", self.dir):
+            self.assertEqual(len(sessions.list_sessions()), 1, "得真列出来了才算")
+        self.assertEqual(_mode(self.dir), 0o700, oct(_mode(self.dir)))
+
+    def test_a_stricter_session_choice_is_left_alone(self):
+        """0400 比 0600 还严，别替他放宽——和配置那边同一条规矩。"""
+        from guanjia import sessions
+
+        with patch.object(sessions, "DIR", self.dir):
+            sessions.save("abc123", [{"role": "user", "text": "你好"}])
+            saved = self.dir / "abc123.json"
+            saved.chmod(0o400)
+            sessions.load("abc123")
+        self.assertEqual(_mode(saved), 0o400, oct(_mode(saved)))
 
     def test_sessions_and_the_config_share_one_implementation(self):
         """两处各写一遍的话，迟早只有一处被修。
