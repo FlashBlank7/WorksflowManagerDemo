@@ -32,13 +32,22 @@ def save(sid: str, messages: list[dict]) -> bool:
 
 def _save(sid: str, messages: list[dict]) -> bool:
     DIR.mkdir(parents=True, exist_ok=True)
+    try:  # 会话目录里是对话内容，同机其他用户不该看得到
+        DIR.chmod(0o700)
+    except OSError:
+        pass
     first_user = next((m for m in messages if m.get("role") == "user" and m.get("text")), None)
-    _path(sid).write_text(json.dumps({
+    target = _path(sid)
+    target.write_text(json.dumps({
         "id": sid,
         "title": (first_user["text"][:24] if first_user else "新对话"),
         "updated_at": time.strftime("%Y-%m-%d %H:%M"),
         "messages": [m for m in messages if m.get("kind") != "answerbox"][-200:],
     }, ensure_ascii=False), encoding="utf-8")
+    try:  # 单个会话文件同样收权限（目录收了，文件也别落下）
+        target.chmod(0o600)
+    except OSError:
+        pass
     return True
 
 

@@ -43,10 +43,28 @@ def _as_profiles(raw: dict) -> tuple[str, dict]:
     return "default", {}
 
 
+def _private(path: Path) -> None:
+    """把文件权限收成 0600——只有自己能读。
+
+    2026-08-29 实测：~/.guanjia.json 里存着 API 令牌，权限却是 0644。
+    这台机器上还有别的用户，谁都能读走令牌、以你的身份操作平台。
+    umask 默认 022，所以不显式收就是 644。
+
+    收不动就算了（比如挂在不支持权限的文件系统上）——
+    存不下配置比权限松更糟。
+    """
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
 def _write(active: str, profiles: dict) -> None:
-    _config_path().write_text(
+    path = _config_path()
+    path.write_text(
         json.dumps({"active": active, "profiles": profiles}, ensure_ascii=False, indent=1),
         encoding="utf-8")
+    _private(path)
 
 
 def load_config(server: str | None = None, token: str | None = None,
