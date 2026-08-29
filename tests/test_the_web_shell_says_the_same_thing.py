@@ -92,3 +92,38 @@ class TestTheMoreKindsNote:
 def test_the_wordings_this_file_pins_are_all_present(phrase):
     """免得哪天 app.js 被整个重写、上面那些 `in` 断言集体变成空断言。"""
     assert phrase in APP_JS
+
+
+class TestTheWeekChartCountsInFlightRuns:
+    """网页壳的柱状图原来只算 ok+fail。
+
+    于是"那天 5 条在排队"和"那天什么都没跑"画出来一模一样（都是 3px 的空柱）。
+    CLI 的趋势条特意分了两档（○ 跑了没结果 / · 无运行），理由是本项目
+    反复写过的那条：**没跑过不等于好**。两处看的是同一份 week 数据，
+    结论不该相反。
+    """
+
+    def test_the_total_includes_other(self):
+        assert "const tot=w=>w.ok+w.fail+(w.other||0);" in APP_JS
+        assert "w.ok+w.fail);" not in APP_JS, "又只按成败算高度了"
+
+    def test_there_is_a_band_for_it(self):
+        assert "b-other" in APP_JS
+        css = (Path(__file__).resolve().parent.parent
+               / "guanjia/web/style.css").read_text(encoding="utf-8")
+        assert ".week .b-other{" in css, "画了这一档却没有样式"
+
+    def test_the_success_band_does_not_swallow_it(self):
+        """三段要各算各的：ok 段是 h-fh-oh，不然未出结果会被画成成功。"""
+        assert "Math.max(0,h-fh-oh)" in APP_JS
+
+    def test_the_tooltip_mentions_it(self):
+        assert "' · 未出结果 '+w.other" in APP_JS
+
+    def test_the_cli_side_still_distinguishes_the_two(self):
+        """对照组：CLI 那边这两档必须一直是两个不同的字符。"""
+        from guanjia.overview_view import _cell
+
+        nothing = _cell({"date": "2026-08-30", "ok": 0, "fail": 0, "other": 0})
+        in_flight = _cell({"date": "2026-08-30", "ok": 0, "fail": 0, "other": 5})
+        assert nothing != in_flight, (nothing, in_flight)

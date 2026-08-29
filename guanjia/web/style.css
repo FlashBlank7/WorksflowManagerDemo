@@ -233,6 +233,9 @@ main{flex:1;min-width:0;display:flex;flex-direction:column}
   width:26px;min-height:52px}
 .week .b-ok{width:14px;background:var(--ok);border-radius:2px 2px 0 0}
 .week .b-bad{width:14px;background:var(--err);border-radius:2px 2px 0 0}
+/* 跑了但还没出结果（排队/进行中/等人工）——既不是成也不是败，
+   更不是「那天没跑」。CLI 的趋势条一直用单独一档 ○ 表示它。 */
+.week .b-other{width:14px;background:var(--sub);opacity:.45;border-radius:2px 2px 0 0}
 .week .bar span{font-size:10px;color:var(--sub);margin-top:4px}
 
 .h-rerun{font-size:11px;padding:2px 8px;border:1px solid var(--line);border-radius:5px;
