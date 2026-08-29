@@ -63,6 +63,7 @@ guanjia web        # 本地网页壳 http://127.0.0.1:7800（--app 独立窗口 
 guanjia remote     # 多远端档案：list / use <名> / add <名> [服务器] / rm <名>
 guanjia doctor     # 哪里不对一查便知：配置 → 可达 → 登录态 → 会话存储
 guanjia run GPU日报 --json   # 脚本/cron 直接跑工作流：名字子串即可，退出码可判
+guanjia rerun 3f2a      # 用原输入重跑某次运行（run 前缀即可）
 eval "$(guanjia completion bash)"   # Tab 补全（zsh 同理），run 后直接补工作流名
 guanjia export GPU日报 && guanjia import GPU日报.guanjia.json --name 副本   # 搬运工作流
 ```
