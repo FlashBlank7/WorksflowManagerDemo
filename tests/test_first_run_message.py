@@ -3,7 +3,7 @@
 回归背景（2026-08-29，拿一个全新的 HOME 走新用户路径）：
 
     $ guanjia today
-    后端返回 401：invalid API token
+    后端返回 401：令牌不对或已失效——重新登录一次
     登录态失效了，重新登录：guanjia --login
 
 他一次都还没登录过。这句话既说不通，也没告诉他第一步该干什么——
@@ -19,7 +19,7 @@ from guanjia.remote import RemoteError, RemoteUnreachable, next_step
 
 class FirstRunMessageTest(unittest.TestCase):
     def test_a_brand_new_user_is_told_how_to_start(self):
-        text = next_step(RemoteError(401, "invalid API token"), has_token=False)
+        text = next_step(RemoteError(401, "令牌不对或已失效——重新登录一次"), has_token=False)
         self.assertIn("还没登录过", text)
         self.assertIn("guanjia --login", text)
         self.assertNotIn("失效", text)

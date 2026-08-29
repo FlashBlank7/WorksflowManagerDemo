@@ -25,7 +25,7 @@ class StubApi(BaseHTTPRequestHandler):
             if self.headers.get("Authorization") == "Bearer good":
                 self._json(200, {"user": {"name": "tester", "role": "admin"}})
             else:
-                self._json(401, {"detail": "invalid API token"})
+                self._json(401, {"detail": "令牌不对或已失效——重新登录一次"})
         else:
             self._json(404, {"detail": "nope"})
 
