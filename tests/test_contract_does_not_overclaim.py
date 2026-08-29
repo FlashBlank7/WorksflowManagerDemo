@@ -29,6 +29,18 @@ class FakeClient:
         self.routes = routes
         self.seen: list[str] = []
 
+    def probe_stream(self, path):
+        """假客户端也得会探流——不然契约会把它报成"没验"，
+        而这个夹具声称自己是个完整后端。桩缺一个方法，
+        就等于悄悄把一整类检查从"查过了"降级成"没查"。"""
+        self.seen.append(path)
+        for pattern, payload in self.routes.items():
+            if re.fullmatch(pattern, path):
+                if isinstance(payload, Exception):
+                    raise payload
+                return 200, "text/event-stream"
+        raise contract.RemoteError(404, "Not Found")
+
     def request(self, method, path, *args, **kwargs):
         self.seen.append(path)
         for pattern, payload in self.routes.items():
@@ -40,6 +52,7 @@ class FakeClient:
 
 
 FULL = {
+    r"/health": {"status": "ok"},
     r"/api/v1/me": {"user": {"name": "demo"}},
     r"/api/v1/applications": [{"id": "a1", "name": "词频"}],
     r"/api/v1/overview": {"runs_today": {"total": 0, "succeeded": 0, "failed": 0},
@@ -58,6 +71,7 @@ FULL = {
     r"/api/v1/builds/b1/transcript": {},
     r"/api/v1/runs/r1": {"status": "succeeded"},
     r"/api/v1/runs/r1/artifacts": [],
+    r"/api/v1/runs/r1/events": {},          # SSE：实际只看状态和 Content-Type
     r"/api/v1/runs/r1/events/list.*": [],
 }
 
@@ -82,7 +96,11 @@ class ConclusionMatchesWhatWasCheckedTest(unittest.TestCase):
     def test_it_never_claims_more_endpoints_than_it_probed(self):
         code, output = _run(FULL)
         claimed = int(re.search(r"(\d+) 个只读接口全齐", output).group(1))
-        probed = len(contract.READ_ENDPOINTS) + len(contract.ID_ENDPOINTS)
+        # 三张只读表都要算——2026-08-29 加了 STREAM_ENDPOINTS，
+        # 这一行没跟上，于是它把结论多说了一个报了出来。
+        # 报得对：漏的是这行，不是结论。
+        probed = (len(contract.READ_ENDPOINTS) + len(contract.ID_ENDPOINTS)
+                  + len(contract.STREAM_ENDPOINTS))
         self.assertLessEqual(claimed, probed, "结论里的数字比实际探过的还多")
 
     def test_a_missing_read_endpoint_is_reported_not_swallowed(self):
@@ -138,3 +156,145 @@ class SamplerToleranceMatchesTheClientTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContractCoversWhatTheClientActuallyCallsTest(unittest.TestCase):
+    """契约表要盖住客户端真会请求的每一个只读接口。
+
+    2026-08-29：把 guanjia 源码里出现的 /api/v1 路径和契约表对了一遍，
+    发现 `/api/v1/runs/{id}/events`（SSE，run --follow 和 REPL 跟踪搭建用）
+    从来没被检查过，而结论那句写的是「只读接口全齐——guanjia 能完整发挥」。
+    只实现了 events/list、没实现 events 的后端会通过检查，
+    然后 --follow 当场不动。/health 也一样漏着。
+
+    这跟上一次的毛病是同一个：**结论说的比检查到的多**。
+    表是手写的，客户端是另写的，两边迟早分家——所以让测试去比。
+    """
+
+    IGNORE = {
+        # f-string 切片被正则截出来的碎片，不是真路径
+        "/api/v1/applications/{app[", "/api/v1/applications/{ids[",
+        "/api/v1/builds/{body[",
+    }
+
+    def _called(self) -> set:
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent / "guanjia"
+        found = set()
+        for path in root.rglob("*.py"):
+            if "__pycache__" in str(path):
+                continue
+            for match in re.finditer(
+                    r'["\']((?:/api/v1|/health)[^"\'\s]*)["\']',
+                    path.read_text(encoding="utf-8")):
+                found.add(match.group(1))
+        return found
+
+    @staticmethod
+    def _norm(path: str) -> str:
+        import re
+
+        return re.sub(r"\{[^}]*\}", "{id}", path).split("?")[0].rstrip("/")
+
+    def _listed(self) -> set:
+        from guanjia import contract
+
+        out = set()
+        for row in contract.READ_ENDPOINTS:
+            out.add(self._norm(row[0]))
+        for row in contract.ID_ENDPOINTS:
+            out.add(self._norm(row[0]))
+        for row in contract.STREAM_ENDPOINTS:
+            out.add(self._norm(row[0]))
+        for name, _purpose in contract.WRITE_ENDPOINTS:
+            out.add(self._norm(name.split()[-1]))
+        return out
+
+    def test_no_endpoint_is_called_without_being_in_the_table(self):
+        called = {self._norm(p) for p in self._called()
+                  if p not in self.IGNORE}
+        called -= {self._norm(p) for p in self.IGNORE}
+        gaps = sorted(called - self._listed())
+        self.assertEqual(gaps, [],
+                         f"客户端会请求、但契约表里没有（结论会多说）：{gaps}")
+
+    def test_the_count_matches_what_is_actually_probed(self):
+        """结论里那个数必须等于三张只读表加起来。
+
+        加了新表却不改计数的话，这句话会比实际查过的少报——
+        而这句话的全部意义就是"数清楚查了几个"。
+        """
+        import inspect
+
+        from guanjia import contract
+
+        source = inspect.getsource(contract.run)
+        self.assertIn("STREAM_ENDPOINTS", source,
+                      "计数没把流式表算进去")
+
+
+class TheFullFixtureIsActuallyFullTest(unittest.TestCase):
+    """FULL 自称是"完整后端"，那它就得盖住表里每一条。
+
+    2026-08-29 往 READ_ENDPOINTS 加 /health、往新表加 SSE 端点时，
+    这份手写的 FULL 立刻落后了——而它落后的表现是
+    「完整后端居然没通过」，还算响了。更糟的情况是反过来：
+    表里删掉一条，FULL 多一条没人用的路由，谁也不知道。
+
+    所以让测试去比，而不是靠记得同步两处。
+    """
+
+    def test_every_table_entry_has_a_route_in_the_fixture(self):
+        from guanjia import contract
+
+        rows = ([row[0] for row in contract.READ_ENDPOINTS]
+                + [row[0] for row in contract.ID_ENDPOINTS]
+                + [row[0] for row in contract.STREAM_ENDPOINTS])
+        missing = []
+        for template in rows:
+            path = (template.replace("{id}", "a1")
+                    if "/applications/{id}" in template
+                    else template.replace("{id}", "b1")
+                    if "/builds/{id}" in template
+                    else template.replace("{id}", "r1"))
+            if not any(re.fullmatch(pattern, path) for pattern in FULL):
+                missing.append(template)
+        self.assertEqual(missing, [],
+                         f"FULL 自称完整，却没有这些路由：{missing}")
+
+
+
+class StreamEndpointMustActuallyStreamTest(unittest.TestCase):
+    """SSE 端点回 200 还不够——回的得是流。
+
+    一个把 /runs/{id}/events 实现成"返回一个 JSON 数组"的后端，
+    路由在、状态码 200，而 guanjia 会挂在那儿等一个永远不来的事件。
+    只看状态码的检查会给它打勾。
+    """
+
+    class _JsonInsteadOfStream(FakeClient):
+        def probe_stream(self, path):
+            self.seen.append(path)
+            return 200, "application/json"          # 路由在，但不是流
+
+    def test_a_json_answer_on_a_stream_path_is_flagged(self):
+        client = self._JsonInsteadOfStream(FULL)
+        out = io.StringIO()
+        with patch.object(contract, "RemoteClient", lambda *a, **k: client), \
+             redirect_stdout(out):
+            contract.run({"server": "http://x", "token": "t"})
+        text = _strip_ansi(out.getvalue())
+        self.assertIn("text/event-stream", text)
+        self.assertNotIn("只读接口全齐", text)
+
+    def test_a_real_stream_is_accepted(self):
+        """别把闸关死：正经回 text/event-stream 的要能过。"""
+        client = FakeClient(FULL)
+        out = io.StringIO()
+        with patch.object(contract, "RemoteClient", lambda *a, **k: client), \
+             redirect_stdout(out):
+            code = contract.run({"server": "http://x", "token": "t"})
+        self.assertEqual(code, 0)
+        self.assertIn("只读接口全齐", _strip_ansi(out.getvalue()))

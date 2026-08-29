@@ -27,6 +27,11 @@ NORM = "\x1b[0m"
 # 字段清单是从客户端**实际读取的地方**倒推来的，不是拍脑袋列的。
 # "a.b" 表示嵌套；"[].x" 表示「响应是数组，每个元素要有 x」。
 READ_ENDPOINTS = (
+    # /health 一直没在表里，而 guanjia 拿它判"后端在不在"。
+    # 少了它 doctor 的可达性那一行会走进 RemoteError 分支（当成"有路由"），
+    # 契约检查又根本不问——两边都不报，实现方却少了一个必需接口。
+    ("/health", True, "guanjia 判断不了后端在不在（doctor 的可达性一节）",
+     ()),
     ("/api/v1/me", True, "认不出你是谁，登录态无从判断",
      ("user.name",)),
     ("/api/v1/applications", True, "列不出工作流——guanjia 基本没法用",
@@ -73,6 +78,23 @@ ID_ENDPOINTS = (
      "下载不了运行产物", ()),
     ("/api/v1/runs/{id}/events/list?limit=20", "run", False,
      "看不了运行的流水账", ()),
+)
+
+
+# SSE 流式接口。**它们是 GET、没有副作用，本该被探，却一条都没在表里。**
+#
+# 2026-08-29 把"客户端源码里真会请求的路径"和"契约表里列的"对了一遍，
+# 才发现 /api/v1/runs/{id}/events 从来没被检查过——
+# 而结论那句写的是「只读接口全齐——guanjia 能完整发挥」。
+# 一个只实现了 events/list、没实现 events 的后端会通过契约检查，
+# 然后 `guanjia run --follow` 和 REPL 里的搭建跟踪当场不动。
+# 这跟上一次的毛病是同一个：**结论说的比检查到的多**。
+#
+# 探法：开连接、看状态码、立刻关掉，一个事件都不读——
+# 流是无限的，读下去这个检查就永远不返回。
+STREAM_ENDPOINTS = (
+    ("/api/v1/runs/{id}/events", "run", False,
+     "run --follow 和 REPL 的搭建跟踪看不到实时进度（会退回轮询）"),
 )
 
 
@@ -135,6 +157,34 @@ def _probe(client: RemoteClient, path: str,
         return "error", f"HTTP {error.status}"
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         return "unreachable", str(error)
+
+
+def _probe_stream(client: RemoteClient, path: str) -> tuple[str, str]:
+    """探一个 SSE 端点：开连接、看状态、立刻关掉。
+
+    走 client.probe_stream 而不是自己拼 urllib：探测逻辑一旦直接摸
+    client.server，测试里的桩就得长得跟真客户端一模一样——
+    那是"夹具与真值分家"的另一种写法。
+    """
+    try:
+        code, kind = client.probe_stream(path)
+    except urllib.error.HTTPError as error:
+        if error.code in (404, 405):
+            return "missing", f"HTTP {error.code}"
+        if error.code in (401, 403):
+            return "ok", f"HTTP {error.code}（有路由，权限不足）"
+        return "error", f"HTTP {error.code}"
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        return "unreachable", str(getattr(error, "reason", error))
+    except AttributeError:
+        # 老客户端/桩没有这个方法：如实说没验，别假装验过
+        return "unsampled", "这个客户端不支持探流式接口"
+    if code != 200:
+        return "error", f"HTTP {code}"
+    if kind and kind != "text/event-stream":
+        # 路由在，但答的不是流——客户端会一直等不到事件
+        return "shape", f"Content-Type 是 {kind}，不是 text/event-stream"
+    return "ok", ""
 
 
 def _sample_ids(client: RemoteClient) -> dict[str, str | None]:
@@ -226,6 +276,30 @@ def run(cfg: dict) -> int:
         else:
             print(f"{WARN} {shown}  {DIM}答了但不正常（{note}）{NORM}")
 
+    for template, kind, required, consequence in STREAM_ENDPOINTS:
+        sample = ids.get(kind)
+        if not sample:
+            unsampled.append(template)
+            print(f"{WARN} {template}  {DIM}没验：库里没有可用的{kind}做样本{NORM}")
+            continue
+        state, note = _probe_stream(client, template.replace("{id}", str(sample)))
+        if state == "unsampled":
+            unsampled.append(template)
+            print(f"{WARN} {template}  {DIM}没验：{note}{NORM}")
+            continue
+        if state == "ok":
+            print(f"{OK} {template}  {DIM}{note or '实时流'}{NORM}")
+        elif state == "shape":
+            shape_gaps.append(f"{template}：{note}")
+            print(f"{WARN} {template}  {DIM}{note}{NORM}")
+        elif state == "missing":
+            mark, bucket = (BAD, missing_required) if required else (WARN, degraded)
+            bucket.append(template)
+            print(f"{mark} {template}  "
+                  f"{DIM}{'必需' if required else '可选'}·缺失 → {consequence}{NORM}")
+        else:
+            print(f"{WARN} {template}  {DIM}答了但不正常（{note}）{NORM}")
+
     print(f"\n{DIM}以下接口有副作用，不自动探测——自己实现后端的话别漏了：{NORM}")
     for name, purpose in WRITE_ENDPOINTS:
         print(f"  {DIM}· {name}  {purpose}{NORM}")
@@ -256,7 +330,19 @@ def run(cfg: dict) -> int:
               f"相应功能会静默降级：{'、'.join(degraded)}")
         note_unsampled()
         return 0
-    checked = len(READ_ENDPOINTS) + len(ID_ENDPOINTS) - len(unsampled)
+    # 流式那张表也要计入——加了新表却不改这行的话，
+    # 这个数会比实际查过的少，而这句话的全部意义就是数清楚查了几个。
+    checked = (len(READ_ENDPOINTS) + len(ID_ENDPOINTS) + len(STREAM_ENDPOINTS)
+               - len(unsampled))
+    if shape_gaps:
+        # 路由都在，但响应形状不对——**这时候不能说「能完整发挥」**。
+        # 上面刚列完「guanjia 读到一半会出错」，结论却接一句「全齐」，
+        # 读的人只会记住最后那句。同一个毛病这次换在结论和正文之间：
+        # 结论说的比检查到的多。
+        print(f"{WARN} {checked} 个只读接口路由都在，但上面 {len(shape_gaps)} 个"
+              f"响应形状不对——先把字段补齐，否则 guanjia 会读到一半出错。")
+        note_unsampled()
+        return 0
     if unsampled:
         print(f"{WARN} 查过的 {checked} 个只读接口都齐了；")
         note_unsampled()

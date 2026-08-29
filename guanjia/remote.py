@@ -166,6 +166,28 @@ class RemoteClient:
             raise RemoteError(
                 200, f"返回的不是 JSON（对面可能不是 guanjia 平台）：{text[:120]}") from error
 
+    def probe_stream(self, path: str) -> tuple[int, str]:
+        """开一个 SSE 连接，看一眼状态和 Content-Type 就挂断，一个事件都不读。
+
+        契约自查要用。不能借 request()——它把整个响应体读完再解析 JSON，
+        而 SSE 是不结束的流：那样检查会挂到超时，再把一个活得好好的接口
+        报成"连不上"。也不能借 stream()——它是生成器，一读就等事件。
+
+        放在 RemoteClient 上而不是写在 contract.py 里，是为了让假客户端
+        也能替换掉它：探测逻辑一旦直接摸 self.server，测试里的桩就得
+        长得跟真客户端一模一样，那是另一种夹具与真值分家。
+        """
+        request = urllib.request.Request(
+            f"{self.server}{path}", method="GET",
+            headers={"Authorization": f"Bearer {self.token}",
+                     "Accept": "text/event-stream"})
+        response = urllib.request.urlopen(request, timeout=self.timeout)
+        try:
+            return response.status, (
+                response.headers.get("Content-Type") or "").split(";")[0].strip()
+        finally:
+            response.close()
+
     def stream(self, path: str, body: dict | None = None):
         """SSE 流：逐事件产出 dict；body=None 走 GET（如运行事件直播）。
         带 event:/id: 行的流会把类型放进 _event、序号放进 _id（不覆盖数据本身的键）。

@@ -52,7 +52,12 @@ def _server(payloads: dict) -> tuple[HTTPServer, str]:
             path = self.path.split("?")[0]
             body = json.dumps(payloads.get(path, {})).encode()
             self.send_response(200 if path in payloads else 404)
-            self.send_header("Content-Type", "application/json")
+            # SSE 路径必须回 text/event-stream：契约会核对这一项，
+            # 回 JSON 的后端等于"路由在但答的不是流"
+            self.send_header(
+                "Content-Type",
+                "text/event-stream" if self.path.endswith("/events")
+                else "application/json")
             self.end_headers()
             self.wfile.write(body)
 
@@ -96,6 +101,12 @@ class ShapeCheckEndToEndTest(unittest.TestCase):
             "/api/v1/runs/a": {"status": "succeeded"},
             "/api/v1/runs/a/artifacts": [],
             "/api/v1/runs/a/events/list": [],
+            # 这两个是 2026-08-29 加进契约表的：/health 和 SSE 实时流。
+            # 名字叫 _complete 的夹具，表一长就得跟着长——
+            # 不跟的话它会以"完整后端居然没过"的形式炸出来（红得对），
+            # 但更糟的是反过来：表里删一条、夹具留一条，谁也不知道。
+            "/health": {"status": "ok"},
+            "/api/v1/runs/a/events": {},
         }
 
     def test_complete_shapes_pass(self):
