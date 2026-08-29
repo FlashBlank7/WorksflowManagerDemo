@@ -28,6 +28,22 @@ def _strip(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
+
+class _Dead:
+    """假远端：构造得起来，一请求就说连不上。
+
+    真去连 http://被指定的 会拖慢测试，也把"参数有没有透传"
+    和"网络通不通"混成一件事。
+    """
+
+    def __init__(self, server, token=None, *a, **k):
+        self.server = server
+
+    def request(self, *a, **k):
+        from guanjia.remote import RemoteUnreachable
+        raise RemoteUnreachable(self.server, "测试里不连网")
+
+
 class ConnectionArgsTest(unittest.TestCase):
     def test_the_server_flag_is_read(self):
         from guanjia.__main__ import _connection_args
@@ -143,6 +159,59 @@ class DoctorHonoursTheServerFlagTest(unittest.TestCase):
             doctor.run()
         self.assertIn("档案里的", _strip(buf.getvalue()))
 
+
+
+class EverySubcommandTakesTheSameThreeFlagsTest(unittest.TestCase):
+    """帮助里写了「任何命令都能临时换远端」，那就得每条都真的能。
+
+    补 today/doctor 的时候顺手把 run/rerun/export/import 也补齐了——
+    否则就成了「today 能用、run 报错」的新不一致，用户得记住
+    哪条命令支持哪个参数。这条测试盯着这句承诺别再走样。
+    """
+
+    # 函数名写死，不用 getattr 兜底——兜底会让"这个子命令根本不存在"
+    # 悄悄退化成"测了另一个子命令"，那正是断言比保证弱的典型。
+    CASES = (
+        ("main", ["某工作流"]),
+        ("rerun_main", ["abcdef"]),
+        ("export_main", ["某工作流"]),
+        ("import_main", ["/不存在的文件"]),
+    )
+
+    def test_each_one_accepts_server_token_profile(self):
+        from guanjia import runcmd
+
+        seen = []
+
+        def spy(server=None, token=None, profile=None):
+            seen.append((server, token, profile))
+            return {"server": server or "http://本机", "token": token or "",
+                    "user": "me", "profile": profile or "default"}
+
+        for func_name, positional in self.CASES:
+            entry = getattr(runcmd, func_name)          # 不存在就直接 AttributeError
+            argv = positional + ["--server", "http://被指定的",
+                                 "--token", "给的令牌", "--profile", "prod"]
+            err, out = io.StringIO(), io.StringIO()
+            with patch.object(runcmd, "load_config", spy), \
+                 patch.object(runcmd, "RemoteClient", _Dead), \
+                 redirect_stderr(err), redirect_stdout(out):
+                try:
+                    entry(argv)
+                except SystemExit:
+                    pass
+            self.assertNotIn("不认识这些参数", _strip(err.getvalue()), func_name)
+
+        # 光"不报错"不够——三个值得真的传到 load_config 去
+        self.assertTrue(seen, "一次都没读配置，等于什么也没验")
+        for got in seen:
+            self.assertEqual(got, ("http://被指定的", "给的令牌", "prod"))
+
+    def test_the_help_says_so(self):
+        from guanjia.__main__ import HELP
+
+        self.assertIn("--server", HELP)
+        self.assertIn("--profile", HELP)
 
 if __name__ == "__main__":
     unittest.main()

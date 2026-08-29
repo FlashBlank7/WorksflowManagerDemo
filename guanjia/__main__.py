@@ -34,6 +34,7 @@ HELP = """guanjia（管家）— 终端里说人话，远端工厂造出能跑�
   guanjia --version                         版本
 
 REPL 里：直接说人话；命令 /today /wf /remote /new /login /help /quit。
+任何命令都能临时换远端：--server <地址> --token <令牌> --profile <档案>。
 哪里不对：guanjia doctor。"""
 
 

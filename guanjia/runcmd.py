@@ -52,6 +52,22 @@ def _resolve(items: list[dict], needle: str):
     return hits[0] if len(hits) == 1 else hits
 
 
+
+def _add_connection_args(parser) -> None:
+    """--server / --token / --profile：每个子命令都该有的三个。
+
+    2026-08-29：today 和 doctor 原先把这三个默默吞掉（查了本机却像在查远端）。
+    补它们的时候顺手把这里也补齐——不然就成了
+    「today 能用、run 会报错」的新不一致，用户得记住哪条命令支持哪个。
+    """
+    parser.add_argument("--server", help="后端地址（不给就用当前档案里的）")
+    parser.add_argument("--token", help="访问令牌（不给就用当前档案里的）")
+    parser.add_argument("--profile", help="用哪个远端档案")
+
+
+def _cfg(args):
+    return load_config(server=args.server, token=args.token, profile=args.profile)
+
 def main(argv: list[str]) -> int:
     parser = ChineseArgumentParser(prog="guanjia run", description="直接运行一个已发布工作流")
     parser.add_argument("name", help="工作流名字（支持唯一子串）或 id")
@@ -59,9 +75,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--json", action="store_true", help="输出机器可读 JSON")
     parser.add_argument("--wait", type=float, default=120.0, help="最长等待秒数（默认 120）")
     parser.add_argument("--follow", action="store_true", help="实时滚动事件直到结束")
+    _add_connection_args(parser)
     args = parser.parse_args(argv)
 
-    cfg = load_config()
+    cfg = _cfg(args)
     if not cfg["token"]:
         print("未登录：先 guanjia --login（guanjia doctor 可自查）", file=sys.stderr)
         return 1
@@ -226,9 +243,10 @@ def rerun_main(argv: list[str]) -> int:
     parser.add_argument("run_id", help="run id（today/时间线里的前缀即可）")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--wait", type=float, default=120.0)
+    _add_connection_args(parser)
     args = parser.parse_args(argv)
 
-    cfg = load_config()
+    cfg = _cfg(args)
     if not cfg["token"]:
         print("未登录：先 guanjia --login", file=sys.stderr)
         return 1
@@ -265,9 +283,10 @@ def export_main(argv: list[str]) -> int:
     parser = ChineseArgumentParser(prog="guanjia export", description="导出工作流快照 JSON")
     parser.add_argument("name", help="工作流名字（唯一子串）或 id")
     parser.add_argument("-o", "--out", default=None, help="输出文件；- 表示标准输出")
+    _add_connection_args(parser)
     args = parser.parse_args(argv)
 
-    cfg = load_config()
+    cfg = _cfg(args)
     if not cfg["token"]:
         print("未登录：先 guanjia --login", file=sys.stderr)
         return 1
@@ -308,6 +327,7 @@ def import_main(argv: list[str]) -> int:
     parser.add_argument("file", help="guanjia export 产出的 .guanjia.json（- 读标准输入）")
     parser.add_argument("--name", default=None, help="导入后的名字（默认用快照里的）")
     parser.add_argument("--no-publish", action="store_true", help="只留草稿，不发布")
+    _add_connection_args(parser)
     args = parser.parse_args(argv)
 
     try:
@@ -331,7 +351,7 @@ def import_main(argv: list[str]) -> int:
         print("快照要用 guanjia export 产出的 .guanjia.json，别手改", file=sys.stderr)
         return 2
 
-    cfg = load_config()
+    cfg = _cfg(args)
     if not cfg["token"]:
         print("未登录：先 guanjia --login", file=sys.stderr)
         return 1
