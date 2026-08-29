@@ -65,3 +65,37 @@ class DocsCoverCommandsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KnownLimitsTracksTheVersionTest(unittest.TestCase):
+    """「已知边界」自称对齐某个版本——那就得真的对得上。
+
+    2026-08-29 一看：文档写着"对齐版本 0.6.1"，而 pyproject 已经 0.7.0，
+    里面那条"网页壳只监听 127.0.0.1"也早就不准了（`--host` 能对外开，
+    而且当天起回环也要访问密钥）。
+
+    这份文档的整个价值就是"诚实"——它一旦落后，就从"已知边界"
+    变成"过时的承诺"，比不写更坏。
+    """
+
+    def _limits(self) -> str:
+        return (ROOT / "docs" / "known-limits.md").read_text(encoding="utf-8")
+
+    def test_the_stated_version_is_the_real_one(self):
+        from guanjia import __version__
+
+        self.assertIn(__version__, self._limits(),
+                      f"known-limits 没对齐到 {__version__}")
+
+    def test_it_says_binding_can_be_opened_up(self):
+        """别把回环说成唯一选项。
+
+        原文是「`guanjia web` 只监听 127.0.0.1」——说得像绑定方式没得选，
+        而 `--host` 一直能对外开。断言写成"不许出现某句话"太钝了
+        （改成"**默认**只监听 127.0.0.1"之后那句话仍在，而它是对的）；
+        要断的是**这份文档有没有把可以对外开这件事说出来**。
+        """
+        self.assertIn("--host", self._limits())
+
+    def test_the_access_key_change_is_recorded(self):
+        self.assertIn("访问密钥", self._limits())
