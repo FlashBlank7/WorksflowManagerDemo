@@ -140,12 +140,16 @@ async function loadOverview(){loadPlatform();loadHealth();try{const d=await api(
     <span class="sub2">每天 ${s.at}（${esc(s.timezone)}）</span>
     <span class="right">${s.last_fire_date?'最近触发 '+esc(s.last_fire_date):'尚未触发'}</span></div>`).join('')
     ||'<div class="line-item sub2">还没有定时任务——在生成需求里写"每天X点自动运行"即可</div>';
+  // 截了要说：干净地砍掉会让人分不出这是全文还是半截话，
+  // 而最能照着做的一句常常在末尾。Python 那份（guanjia/failures.py）
+  // 2026-08-30 同一天改的，两处措辞必须一致——有测试钉着。
+  const clip=(t,n)=>t.length<=n?t:t.slice(0,n)+'…';
   // count 是「这个毛病一共出现过几次」，at 是最近那一次。
   // 原先写成「工作流 ×13 … 2026-08-28T10:03:36」，两个数贴在一起，
   // 读起来像"那一刻失败了 13 次"。次数和时刻各自带上说明词才不会串。
   // （CLI 和 REPL 走 guanjia/failures.py 的同一套措辞。）
   $('ov-failures').innerHTML=d.recent_failures.map(f=>`<div class="line-item"><b>${esc(f.workflow)}</b>
-    <span class="sub2">${esc(f.error||'').slice(0,60)}</span>
+    <span class="sub2">${esc(clip(f.error||'',60))}</span>
     <span class="right">${f.count>1?'同样的毛病 '+f.count+' 次，最近一次 ':'最近一次 '}${esc(fmtWhen(f.at))} · run ${esc(f.run_id)}</span></div>`).join('')
     ||'<div class="line-item sub2">近期没有失败 🎉</div>';
   // 截了就说一句：几行很容易被读成"就这些"，而第 N 种可能才是要命的那个。
