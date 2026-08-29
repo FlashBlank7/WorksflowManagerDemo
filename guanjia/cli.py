@@ -46,7 +46,10 @@ from . import sessions
 from .config import list_profiles, load_config, save_login, use_profile
 from .remote import RemoteClient, RemoteError, RemoteUnreachable
 
-G = "\033[32m"; C = "\033[36m"; D = "\033[2m"; B = "\033[1m"; R = "\033[31m"; N = "\033[0m"
+from .palette import seq
+
+# 上色与否由 palette 统一判（NO_COLOR / 非终端 一律不上色）
+G = seq("32"); C = seq("36"); D = seq("2"); B = seq("1"); R = seq("31"); N = seq("0")
 
 
 _WF_CACHE: list[str] = []  # /wf 拉过一次即缓存，Tab 直接补工作流名

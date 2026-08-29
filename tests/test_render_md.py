@@ -7,12 +7,35 @@
 访客第一眼看到的就是它。
 """
 import unittest
+from unittest.mock import patch
 
+from guanjia import cli
 from guanjia.cli import render_md, stream_chunk
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
 RESET = "\033[0m"
+
+
+def setUpModule():
+    """把色码钉成固定值再测**渲染**。
+
+    2026-08-30 之后色码由 palette 决定（非终端就是空串），
+    而 pytest 底下从来不是终端。不钉住的话这几条会"过得更弱"：
+    B/N 是空串时，断言只还能证明星号被去掉了，
+    证明不了它变成了终端加粗——而那正是这个文件要守的东西。
+    上不上色由 test_no_color_is_honoured 那条线管，两件事分开测。
+    """
+    global _patches
+    _patches = [patch.object(cli, "B", BOLD), patch.object(cli, "D", DIM),
+                patch.object(cli, "N", RESET)]
+    for item in _patches:
+        item.start()
+
+
+def tearDownModule():
+    for item in _patches:
+        item.stop()
 
 
 class RenderMarkdownTest(unittest.TestCase):

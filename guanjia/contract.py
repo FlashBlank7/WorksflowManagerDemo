@@ -16,11 +16,14 @@ import urllib.error
 
 from .remote import RemoteClient, RemoteError, RemoteUnreachable
 
-OK = "\x1b[32m✓\x1b[0m"
-BAD = "\x1b[31m✕\x1b[0m"
-WARN = "\x1b[33m!\x1b[0m"
-DIM = "\x1b[2m"
-NORM = "\x1b[0m"
+from .palette import paint, seq
+
+# 上色与否由 palette 统一判（NO_COLOR / 非终端 一律不上色）
+OK = paint("32", "✓")
+BAD = paint("31", "✕")
+WARN = paint("33", "!")
+DIM = seq("2")
+NORM = seq("0")
 
 # (路径, 必需?, 少了会怎样, 响应里必须有的字段)
 #

@@ -13,9 +13,12 @@ from . import sessions
 from .config import list_profiles, load_config
 from .remote import RemoteClient, RemoteError, RemoteUnreachable
 
-OK = "\x1b[32m✓\x1b[0m"
-BAD = "\x1b[31m✕\x1b[0m"
-WARN = "\x1b[33m!\x1b[0m"
+from .palette import paint
+
+# 上色与否由 palette 统一判（NO_COLOR / 非终端 一律不上色）
+OK = paint("32", "✓")
+BAD = paint("31", "✕")
+WARN = paint("33", "!")
 
 
 def _scheduler_health(cfg: dict) -> tuple[dict | None, str]:
