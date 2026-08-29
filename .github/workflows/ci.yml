@@ -1,0 +1,72 @@
+name: CI
+
+# guanjia 是零依赖的纯标准库客户端，所以这条流水线也该是零花招的：
+# 装个 Python、装 pytest 和 ruff、跑完。
+#
+# 为什么现在才加（2026-08-29）：仓里有 issue 模板、有 CONTRIBUTING，
+# 248 条测试却从来只在本地跑过。别人提 PR 时没有任何东西替他把关，
+# 而这个项目是奔着给社区用去的。
+#
+# requires-python 写的是 >=3.10，就照着最低和最新各跑一遍：
+# 只测一个版本的话，">=3.10" 这句承诺是没人验过的。
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: 安装
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest ruff
+          pip install -e .
+      # 只开 F 类（pyflakes）：算了没用的变量、没引用的导入、重复定义、
+      # 假 f-string。这些是"代码在说谎"的信号，不是格式偏好。
+      # 格式类规则（行宽之类）故意不开，那些是口味。
+      - name: Ruff（只查真 bug 类）
+        run: ruff check guanjia --select F
+      - name: Pytest
+        run: pytest tests/ -q
+
+  # 零依赖是这个项目的卖点之一（客户端不跑模型、不存业务数据）。
+  # 卖点要有东西盯着，不然哪天悄悄多一个依赖也没人发现。
+  no-dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 确认 dependencies 是空的
+        run: |
+          python - <<'PY'
+          import re, sys, pathlib
+          text = pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          match = re.search(r"^dependencies\s*=\s*\[(.*?)\]", text, re.S | re.M)
+          if match is None:
+              sys.exit("pyproject 里找不到 dependencies")
+          inside = match.group(1).strip()
+          if inside:
+              sys.exit(f"guanjia 应当零依赖，现在有：{inside}")
+          print("零依赖 ✓")
+          PY
+      - name: 只用标准库也装得上、跑得起来
+        run: |
+          pip install -e .
+          guanjia --version
+          guanjia --help > /dev/null
