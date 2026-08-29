@@ -50,6 +50,9 @@ def run(cfg: dict | None = None) -> int:
     cfg = cfg if cfg is not None else load_config()
     _, profiles = list_profiles()
     problems: list[str] = []
+    # 没查成的部件单独记一笔。**「没查」和「查过没事」必须长得不一样**——
+    # 不然最后那句「一切正常」是在替没查过的部分打包票。
+    unchecked: list[str] = []
 
     # 1 配置
     if profiles:
@@ -122,6 +125,7 @@ def run(cfg: dict | None = None) -> int:
         sched, why = _scheduler_health(cfg)
         if sched is None:
             print(f"{WARN} 调度器：没验（{why}）")
+            unchecked.append("调度器")
         elif sched.get("alive"):
             behind = sched.get("seconds_since_tick")
             # 「活着」不等于「所有定时都开火了」。某个工作流每轮都被跳过
@@ -194,8 +198,26 @@ def run(cfg: dict | None = None) -> int:
                 problems.append("没跑过的那几个：跑一次试试——"
                                 "`guanjia run <名字> 参数=值`，"
                                 "或者在对话里说「跑一下 <名字>」")
-        except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
-            pass  # 老版本远端没这个端点：体检跳过，不算问题
+        except (RemoteError, urllib.error.URLError, TimeoutError, OSError) as error:
+            # **说出来**。原来是光秃秃一个 pass：体检接口一旦答不了
+            # （网络抖一下、后端 500、没登录），这一整段就无声跳过，
+            # 而最后照样打「一切正常」——正是这个文件反复写的那件事：
+            # 诊断工具最不该在没查过某个部件的情况下宣布全好。
+            # 调度器那一段一直是对的（sched is None 时打「没验（原因）」），
+            # 就这一段漏了。同一个判据没铺满所有出口，今天第 N 次。
+            #
+            # 仍然不算 problems：老远端确实没有这个接口，那不是用户的错。
+            # 但"没查"和"查过没事"必须长得不一样。
+            if isinstance(error, RemoteError) and error.status in (404, 405):
+                why = "远端没有这个接口，多半是旧版本"
+            elif isinstance(error, RemoteError) and error.status in (401, 403):
+                why = "还没登录，查不了"
+            elif isinstance(error, RemoteError):
+                why = f"远端答了 {error.status}"
+            else:
+                why = "连不上远端"
+            print(f"{WARN} 工作流健康：没验（{why}）")
+            unchecked.append("工作流健康")
 
     # 5 会话存储
     try:
@@ -215,5 +237,9 @@ def run(cfg: dict | None = None) -> int:
         for item in problems:
             print(f"  · {item}")
         return 1
+    if unchecked:
+        # 没发现问题 ≠ 一切正常。差别就在这句话上。
+        print(f"没发现问题，但{'、'.join(unchecked)}没查成——别当成全好。")
+        return 0
     print("一切正常。直接 guanjia 开聊。")
     return 0
