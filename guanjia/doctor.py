@@ -149,6 +149,12 @@ def run(cfg: dict | None = None) -> int:
                 "GET", "/api/v1/health-report")
             counts = report.get("counts") or {}
             bad = [i for i in report.get("items", []) if i.get("state") != "ok"]
+            # 发布了却一次都没跑过的，四个状态里落在"正常"那一格——
+            # 它确实没坏，但"正常"是个结论，而这种工作流一条证据都没有。
+            # 服务端单列了一格 never_ran；这里不读它的话，doctor 会跟着
+            # 报"都正常"，和面板犯同一个错。
+            # （老服务端没有这个键，取不到就当空，不影响。）
+            never_ran = report.get("never_ran") or []
             if not bad:
                 print(f"{OK} 工作流健康：{counts.get('ok', 0)} 个已发布工作流都正常")
             else:
@@ -177,6 +183,13 @@ def run(cfg: dict | None = None) -> int:
                                         "多半是工作流的定时配置改过没发布：先 guanjia run "
                                         "手动跑一次，再在对话里确认它的定时设置")
                     # 调度器已经报停了的话，上面那条 problems 就是根因，不用再加
+            if never_ran:
+                names = "、".join(never_ran[:3])
+                more = f" 等 {len(never_ran)} 个" if len(never_ran) > 3 else ""
+                print(f"{WARN} 其中 {names}{more} 还没跑过，好不好还看不出来")
+                problems.append("没跑过的那几个：跑一次试试——"
+                                "`guanjia run <名字> 参数=值`，"
+                                "或者在对话里说「跑一下 <名字>」")
         except (RemoteError, urllib.error.URLError, TimeoutError, OSError):
             pass  # 老版本远端没这个端点：体检跳过，不算问题
 
