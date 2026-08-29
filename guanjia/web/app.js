@@ -196,6 +196,12 @@ function renderChat(waiting){const stick=nearBottom();$('chat-col').innerHTML=S.
 
 /* ── 迷你 markdown（切片5）：先转义后变换，支持表格/代码块/列表/加粗/行内码 ── */
 function md(t){
+  // 内部上下文标记先剪掉，**必须在 esc 之前**：esc 会把 < 变成 &lt;，
+  // 之后就再也认不出来了，标记会原样显示在对话里。
+  // 服务端出口会剪，但流式分片是逐字发的、可能带着它先到屏幕上——
+  // 命令行那边为此专门挡了第二道（cli.py 的 _CONTEXT_MARK），
+  // 网页壳一直没有。同一个判据没铺满出口，今天第四次。
+  t=String(t).replace(/<上下文[^>]*\/>\s*/g,'');
   t=esc(t);
   t=t.replace(/```[a-z]*\n([\s\S]*?)```/g,(_,c)=>`<pre class="md-pre">${c}</pre>`);
   const lines=t.split('\n');const out=[];let i=0;
@@ -218,7 +224,9 @@ function md(t){
     out.push(L?`<p class="md-p">${inl(L)}</p>`:'');i++}
   return out.join('')}
 function inl(t){return t
-  .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+  // 和 Python 那边同一条判据：星号必须紧贴非空白，
+  // 否则 `** x **` 在网页上是粗体、在终端里不是。
+  .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g,'<b>$1</b>')
   .replace(/`([^`]+)`/g,'<code class="md-c">$1</code>')}
 
 function pushMsg(role,text,wait){S.messages.push({role,text});renderChat(wait)}

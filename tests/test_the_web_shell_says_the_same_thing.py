@@ -172,3 +172,41 @@ class TestTheStatusMarksMatch:
         table = APP_JS[APP_JS.index("const M={"):APP_JS.index("]};") + 3]
         listed = set(_re.findall(r"(\w+):\[", table))
         assert listed == set(MARKS), (listed ^ set(MARKS))
+
+
+class TestTheMarkdownRenderersAgree:
+    """`render_md`（Python）和 `md()`（JS）的注释互相写着"改一边记得同步另一边"，
+    而没有任何东西保证。核出两处不一致，一处是真会露给用户的：
+
+    · **内部上下文标记 `<上下文 …/>` 网页壳不剪**。服务端出口会剪，
+      但流式分片逐字发、可能带着它先到屏幕上——命令行为此专门挡了
+      第二道（cli.py 的 _CONTEXT_MARK），网页壳一直没有。
+      而 md() 一上来就 esc()，`<` 变成 `&lt;`，于是它会**原样显示**在对话里。
+    · 粗体判据松紧不同：Python 要求星号紧贴非空白，JS 不要求，
+      于是 `** x **` 在网页上是粗体、在终端里不是。
+    """
+
+    def test_the_context_mark_is_stripped_on_both_sides(self):
+        from guanjia.cli import render_md
+
+        assert render_md('<上下文 注意="x"/>你好') == "你好"
+        assert "上下文[^>]*" in APP_JS, "网页壳没有剪这个标记"
+
+    def test_the_web_shell_strips_it_before_escaping(self):
+        """顺序错了等于没剪：esc 之后 `<` 已经是 `&lt;`，再也认不出来。"""
+        body = APP_JS[APP_JS.index("function md(t){"):]
+        cut = body.index("上下文")
+        esc = body.index("t=esc(t)")
+        assert cut < esc, "剪标记必须在 esc 之前"
+
+    def test_the_bold_rule_is_the_same(self):
+        from guanjia.cli import _MD_BOLD
+
+        assert _MD_BOLD.pattern == r"\*\*(?=\S)(.+?)(?<=\S)\*\*"
+        assert r"/\*\*(?=\S)(.+?)(?<=\S)\*\*/g" in APP_JS
+
+    def test_the_inline_code_rule_is_the_same(self):
+        from guanjia.cli import _MD_CODE
+
+        assert _MD_CODE.pattern == r"`([^`]+)`"
+        assert r"/`([^`]+)`/g" in APP_JS
