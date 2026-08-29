@@ -157,10 +157,16 @@ class DoctorDoesNotClaimWhatItDidNotCheck(unittest.TestCase):
         self.assertNotIn("一切正常", out)
 
     def test_it_names_what_it_could_not_check(self):
+        """结论那一行要把**每一项**都点名。
+
+        第一版只断言这几个词出现在整段输出里——而"工作流健康：没验（…）"
+        那一行本来就会印，于是即使漏记一项、结论里只剩另一项，
+        这条照样绿（变异验证抓到的）。断言要落在结论那一行上。
+        """
         _, out = self._run()
-        self.assertIn("工作流健康", out)
-        self.assertIn("调度器", out)
-        self.assertIn("没查成", out)
+        line = next(l for l in out.splitlines() if "没查成" in l)
+        self.assertIn("工作流健康", line, line)
+        self.assertIn("调度器", line, line)
 
     def test_it_says_why_it_could_not(self):
         """只说"没验"还不够——是没登录、是旧版本、还是后端出错，

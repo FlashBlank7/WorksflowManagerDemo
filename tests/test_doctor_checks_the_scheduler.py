@@ -72,6 +72,16 @@ class DoctorChecksSchedulerTest(unittest.TestCase):
         _, output = _run(scheduler=({"alive": False, "seconds_since_tick": 900}, ""))
         self.assertIn("定时任务不会开火", output)
 
+    def test_the_dead_scheduler_line_carries_the_bad_mark(self):
+        """**记号也要断言。**变异验证（2026-08-30）：把「调度器停了」那行的
+        ✕ 换成 ✓，643 条一条都没红——上面几条只查了文字和退出码。
+        一行写着「✓ 调度器停了」，眼睛先接住的是那个 ✓。
+        """
+        _, output = _run(scheduler=({"alive": False, "seconds_since_tick": 900}, ""))
+        line = next(l for l in _strip(output).splitlines() if "调度器停了" in l)
+        self.assertIn("✕", line, line)
+        self.assertNotIn("✓", line, line)
+
     def test_a_missing_endpoint_says_not_checked_rather_than_nothing(self):
         """老服务端没这个接口——如实说"没验"，不能默默跳过还宣布全好。"""
         code, output = _run(scheduler=(None, "远端没有这个接口，多半是旧版本"))
@@ -131,14 +141,37 @@ class AliveIsNotAllFiringTest(unittest.TestCase):
     doctor 这时打 ✓ 就是替它瞒着——诊断工具最不该做的就是这个。
     """
 
+    SKIPPED = {"alive": True, "seconds_since_tick": 3,
+               "last_error": "这一轮跳过了 「服务器GPU日报」：KeyError: 版本查不到"}
+
     def test_a_skipped_schedule_is_not_a_green_tick(self):
-        code, out = _run(scheduler=(
-            {"alive": True, "seconds_since_tick": 3,
-             "last_error": "这一轮跳过了 「服务器GPU日报」：KeyError: 版本查不到"}, ""))
+        code, out = _run(scheduler=(self.SKIPPED, ""))
         self.assertIn("没能开火", out)
         self.assertIn("服务器GPU日报", out)
         self.assertNotIn("一切正常", out)
         self.assertNotEqual(code, 0, "有定时不开火，退出码不该是 0")
+
+    def test_the_tick_on_that_line_is_not_green(self):
+        """**这条名字里说的就是这件事，可原来没有一条断言真的看那个记号。**
+
+        变异验证（2026-08-30，全量 643 条）：把 `mark = WARN if skipped else OK`
+        改成 `mark = OK`，一条都没红——上面那条查的是下面那行详情
+        （"但有定时没能开火：…"），而详情照旧会打印。
+        于是用户看到的是「✓ 调度器在跑」加一行小字，眼睛先接住的是那个 ✓。
+        这个类的注释写着"doctor 这时打 ✓ 就是替它瞒着"，
+        断言却没落在那一行上。
+        """
+        _, out = _run(scheduler=(self.SKIPPED, ""))
+        line = next(l for l in _strip(out).splitlines() if "调度器在跑" in l)
+        self.assertNotIn("✓", line, line)
+        self.assertIn("!", line, line)
+
+    def test_a_clean_scheduler_does_get_a_green_tick_on_that_line(self):
+        """反向：不能宽到"调度器那行永远不给 ✓"。"""
+        _, out = _run(scheduler=({"alive": True, "seconds_since_tick": 3,
+                                  "last_error": ""}, ""))
+        line = next(l for l in _strip(out).splitlines() if "调度器在跑" in l)
+        self.assertIn("✓", line, line)
 
     def test_a_clean_scheduler_is_still_a_green_tick(self):
         code, out = _run(scheduler=({"alive": True, "seconds_since_tick": 3,
