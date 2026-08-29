@@ -44,7 +44,7 @@ import sys
 
 from . import sessions
 from .config import list_profiles, load_config, save_login, use_profile
-from .remote import RemoteClient, RemoteError, RemoteUnreachable
+from .remote import RemoteClient, RemoteError, RemoteUnreachable, next_step
 
 from .palette import seq
 
@@ -366,7 +366,10 @@ def main() -> None:
                     else:
                         print(f"{D}{line}{N}")
             except RemoteError as error:
-                print(f"{R}{error}{N}")
+                # 令牌过期这类错在 REPL 里也要给下一步。命令行那几个出口
+                # （today / run / export …）一直走 next_step，招牌这条路漏了：
+                # 同一个判据没铺满所有出口，本周第 N 次。
+                print(f"{R}{error}{N}\n{D}{next_step(error, has_token=True)}{N}")
             continue
         if text == "/wf":
             try:
@@ -378,7 +381,10 @@ def main() -> None:
                     print(f"  {G}▸{N} {w['name']} {D}v{w['version']}{N}")
                 say(f"{len(published)} 个已发布（共 {len(items)} 个）——想跑哪个直接说。")
             except RemoteError as error:
-                print(f"{R}{error}{N}")
+                # 令牌过期这类错在 REPL 里也要给下一步。命令行那几个出口
+                # （today / run / export …）一直走 next_step，招牌这条路漏了：
+                # 同一个判据没铺满所有出口，本周第 N 次。
+                print(f"{R}{error}{N}\n{D}{next_step(error, has_token=True)}{N}")
             continue
         history.append({"role": "user", "text": text})
         actions, final, streamed = [], "", False
@@ -421,7 +427,8 @@ def main() -> None:
                     name = action.get("label") or action.get("tool")
                     print(f"  {D}⚙ {name} → {action['summary']}{N}")
             except RemoteError as error:
-                print(f"{R}远端出错：{error}{N}")
+                print(f"{R}远端出错：{error}{N}\n"
+                      f"{D}{next_step(error, has_token=True)}{N}")
                 history.pop()
                 continue
         if final and not streamed:

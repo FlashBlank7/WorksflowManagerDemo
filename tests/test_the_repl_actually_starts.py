@@ -156,3 +156,49 @@ class TestABrokenBackendDoesNotBreakTheShell:
         done = _run_repl("http://127.0.0.1:1", "/quit\n", home=home)
         body = done.stdout + done.stderr
         assert "doctor" in body or "确认" in body, body
+
+
+class ExpiredTokenApi(StubApi):
+    """能开机（/me 通），但之后每个查询都 401——令牌在会话中途过期的样子。"""
+
+    def do_GET(self):
+        if self.path.split("?")[0] in ("/health", "/api/v1/me"):
+            StubApi.do_GET(self)
+        else:
+            self._json(401, {"detail": "令牌不对或已失效"})
+
+
+@pytest.fixture
+def expired_backend():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ExpiredTokenApi)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+    server.server_close()
+
+
+class TestTheReplAlsoTellsYouWhatToDoNext:
+    """命令行那几个出口（today / run / export …）一直走 next_step，
+    **招牌这条路漏了**：REPL 里 /today、/wf、对话出错时只印一行错误。
+
+    令牌中途过期是最常见的一种——用户看到「401 令牌不对或已失效」
+    却不知道要 `guanjia --login`。
+    """
+
+    def test_today_says_what_to_do(self, expired_backend, home):
+        done = _run_repl(expired_backend, "/today\n/quit\n", home=home)
+        assert "登录" in done.stdout, done.stdout
+
+    def test_wf_says_what_to_do(self, expired_backend, home):
+        done = _run_repl(expired_backend, "/wf\n/quit\n", home=home)
+        assert "登录" in done.stdout, done.stdout
+
+    def test_it_still_shows_the_original_error(self, expired_backend, home):
+        """下一步不能把原始错误盖掉——那是判断"到底出了什么事"的依据。"""
+        done = _run_repl(expired_backend, "/today\n/quit\n", home=home)
+        assert "401" in done.stdout or "失效" in done.stdout, done.stdout
+
+    def test_it_does_not_crash(self, expired_backend, home):
+        done = _run_repl(expired_backend, "/today\n/wf\n/quit\n", home=home)
+        assert "Traceback" not in done.stdout + done.stderr
+        assert done.returncode == 0, done.stderr
