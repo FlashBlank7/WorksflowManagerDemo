@@ -13,7 +13,14 @@ function esc(t){return String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 function coerceInput(raw,type){const k=String(type||'string').toLowerCase();
   if(k==='array'||k==='object'||k==='any'||k==='json')return JSON.parse(raw);
   if(k==='number'||k==='float'){const n=Number(raw);if(raw.trim()===''||Number.isNaN(n))throw new Error('要填数字');return n}
-  if(k==='integer'||k==='int'){const n=Number(raw);if(!Number.isInteger(n))throw new Error('要填整数');return n}
+  // 整数这一支原来是 Number(raw)+isInteger：**空串会变成 0**，
+  // 而下面「少了必填项就别发」是拿 String(值).trim()==='' 判的，
+  // 0 不是空串，于是必填校验放行、静默发出一个 0。
+  // 同一支还把 '3.0'、'1e3'、'0x10' 当整数收下，而 Python 那边
+  // int() 全都拒——两边规则说好是一套的（见 coerce_input 的注释）。
+  if(k==='integer'||k==='int'){const s=raw.trim();
+    if(!/^[+-]?\d+(_\d+)*$/.test(s))throw new Error('要填整数');
+    return Number(s.replace(/_/g,''))}
   if(k==='boolean'||k==='bool')return ['true','1','yes','y','是','on'].includes(raw.trim().toLowerCase());
   return raw}
 function needsTextarea(f){const k=String(f.type||'string').toLowerCase();
