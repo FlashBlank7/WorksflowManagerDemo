@@ -65,7 +65,7 @@ def main() -> None:
         try:
             d = RemoteClient(cfg["server"], cfg["token"]).request("GET", "/api/v1/overview")
         except RemoteError as error:
-            print(f"{error}\n{next_step(error)}")
+            print(f"{error}\n{next_step(error, has_token=bool(cfg['token']))}")
             sys.exit(1)
         rt = d["runs_today"]
         running = rt.get("running", 0)

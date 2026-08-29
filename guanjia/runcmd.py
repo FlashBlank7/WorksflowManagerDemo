@@ -69,7 +69,7 @@ def main(argv: list[str]) -> int:
     try:
         items = workflow.list_workflows(remote)
     except RemoteError as error:
-        print(f"{error}\n{next_step(error)}", file=sys.stderr)
+        print(f"{error}\n{next_step(error, has_token=bool(cfg['token']))}", file=sys.stderr)
         return 1
 
     if not args.name.strip():
@@ -243,7 +243,7 @@ def rerun_main(argv: list[str]) -> int:
             run_id = full
         result = workflow.rerun(remote, run_id, wait_seconds=args.wait)
     except RemoteError as error:
-        print(f"{error}\n{next_step(error)}", file=sys.stderr)
+        print(f"{error}\n{next_step(error, has_token=bool(cfg['token']))}", file=sys.stderr)
         return 1
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
@@ -275,7 +275,7 @@ def export_main(argv: list[str]) -> int:
     try:
         target = _resolve(workflow.list_workflows(remote), args.name)
     except RemoteError as error:
-        print(f"{error}\n{next_step(error)}", file=sys.stderr)
+        print(f"{error}\n{next_step(error, has_token=bool(cfg['token']))}", file=sys.stderr)
         return 1
     if isinstance(target, list):
         _say_no_match(args.name, target, workflow.list_workflows(remote))
@@ -283,7 +283,7 @@ def export_main(argv: list[str]) -> int:
     try:
         payload = workflow.export_snapshot(remote, target["id"])
     except RemoteError as error:
-        print(f"导出失败：{error}\n{next_step(error)}", file=sys.stderr)
+        print(f"导出失败：{error}\n{next_step(error, has_token=bool(cfg['token']))}", file=sys.stderr)
         return 1
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.out == "-":
@@ -352,7 +352,7 @@ def import_main(argv: list[str]) -> int:
             app_id = getattr(error, "guanjia_import_app_id", "")
             print(f"（没能收起建了一半的空壳 {app_id[:8]}，可能要手动收一下）",
                   file=sys.stderr)
-        print(next_step(error), file=sys.stderr)
+        print(next_step(error, has_token=bool(cfg['token'])), file=sys.stderr)
         return 1
 
     state = "已发布" if result["published"] else "草稿（未发布）"

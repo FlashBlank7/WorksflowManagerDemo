@@ -57,11 +57,16 @@ class RemoteUnreachable(RemoteError):
         super().__init__(0, f"连不上 {server}：{reason}")
 
 
-def next_step(error: RemoteError) -> str:
+def next_step(error: RemoteError, *, has_token: bool = True) -> str:
     """把一个远端错误翻成"所以你该做什么"。
 
     按原因分岔：连不上的人再怎么登录也没用，令牌过期的人不需要重新部署。
     各入口共用这一份，省得措辞各写各的、还都不分原因。
+
+    has_token 区分"从来没登录过"和"登录过但令牌失效了"。
+    少了这个区分，全新用户第一次敲 `guanjia today` 会被告知
+    「登录态失效了，重新登录」——他一次都还没登录过，
+    这句话既说不通，也没告诉他第一步该干什么。
     """
     if isinstance(error, RemoteUnreachable):
         return ("连不上后端。guanjia 是薄客户端，得有一个工作流平台在跑：\n"
@@ -69,6 +74,10 @@ def next_step(error: RemoteError) -> str:
                 "  · 还没有后端：见项目主页「后端」一节\n"
                 "  · 想看完整自查：guanjia doctor")
     if error.status in (401, 403):
+        if not has_token:
+            return ("还没登录过。第一次用先做这一步：\n"
+                    "  guanjia --login        # 填服务器地址、注册令牌、给自己起个用户名\n"
+                    "不知道服务器地址或注册令牌？找部署这套平台的人要。")
         return "登录态失效了，重新登录：guanjia --login"
     if error.status == 404:
         return "远端没有这个接口——多半是后端版本较旧，或地址指错了地方。"
