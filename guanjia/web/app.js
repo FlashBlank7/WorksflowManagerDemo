@@ -140,11 +140,19 @@ async function loadOverview(){loadPlatform();loadHealth();try{const d=await api(
     <span class="sub2">每天 ${s.at}（${esc(s.timezone)}）</span>
     <span class="right">${s.last_fire_date?'最近触发 '+esc(s.last_fire_date):'尚未触发'}</span></div>`).join('')
     ||'<div class="line-item sub2">还没有定时任务——在生成需求里写"每天X点自动运行"即可</div>';
-  $('ov-failures').innerHTML=d.recent_failures.map(f=>`<div class="line-item"><b>${esc(f.workflow)}</b>${f.count>1?'<span class="sub2"> ×'+f.count+'</span>':''}
+  // count 是「这个毛病一共出现过几次」，at 是最近那一次。
+  // 原先写成「工作流 ×13 … 2026-08-28T10:03:36」，两个数贴在一起，
+  // 读起来像"那一刻失败了 13 次"。次数和时刻各自带上说明词才不会串。
+  // （CLI 和 REPL 走 guanjia/failures.py 的同一套措辞。）
+  $('ov-failures').innerHTML=d.recent_failures.map(f=>`<div class="line-item"><b>${esc(f.workflow)}</b>
     <span class="sub2">${esc(f.error||'').slice(0,60)}</span>
-    <span class="right">run ${esc(f.run_id)} · ${esc(f.at)}</span></div>`).join('')
+    <span class="right">${f.count>1?'同样的毛病 '+f.count+' 次，最近一次 ':'最近一次 '}${esc(fmtWhen(f.at))} · run ${esc(f.run_id)}</span></div>`).join('')
     ||'<div class="line-item sub2">近期没有失败 🎉</div>'}
   catch(e){$('ov-stats').innerHTML='<div class="stat bad"><div class="num">!</div><div class="lbl">'+esc(e.message)+'</div></div>'}}
+
+// 2026-08-28T10:03:36+00:00 → 08-28 10:03
+function fmtWhen(at){const t=String(at||'');
+  return (t.length>=16&&t[4]==='-'&&(t[10]==='T'||t[10]===' '))?t.slice(5,10)+' '+t.slice(11,16):(t||'时间不详')}
 
 function nearBottom(){const el=$('chat-scroll');return el.scrollHeight-el.scrollTop-el.clientHeight<140}
 function renderChat(waiting){const stick=nearBottom();$('chat-col').innerHTML=S.messages.map((m,i)=>{
