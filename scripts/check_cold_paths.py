@@ -20,6 +20,38 @@ GREEN, RED, DIM, RESET = "\x1b[32m", "\x1b[31m", "\x1b[2m", "\x1b[0m"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _js_engine() -> str | None:
+    """找一个能查 JS 语法的引擎。**PATH 之外也找。**
+
+    2026-08-29：这台机器上明明装着 node（前端 :3000 就是它在跑，
+    /proc/<pid>/exe 指向 ~/.local/node/bin/node），但它不在 PATH 上，
+    于是 shutil.which 找不到，这项检查一直在"跳过"。
+    结果就是：机器上有工具、检查却没跑，而人看到的是一行温和的灰字。
+    """
+    import shutil
+
+    for name in ("node", "deno", "bun"):
+        found = shutil.which(name)
+        if found:
+            return found
+    home = os.path.expanduser("~")
+    guesses = [
+        os.path.join(home, ".local", "node", "bin", "node"),
+        os.path.join(home, ".nvm", "current", "bin", "node"),
+        "/usr/local/bin/node",
+        "/opt/node/bin/node",
+    ]
+    # nvm 每个版本一个目录，挑最新的那个
+    nvm = os.path.join(home, ".nvm", "versions", "node")
+    if os.path.isdir(nvm):
+        for version in sorted(os.listdir(nvm), reverse=True):
+            guesses.append(os.path.join(nvm, version, "bin", "node"))
+    for path in guesses:
+        if os.access(path, os.X_OK):
+            return path
+    return None
+
+
 def check_web_assets(cold: "Cold") -> None:
     """网页壳的 JS 语法。有 node/deno/bun 就真检查，没有就明说跳过。
 
@@ -27,10 +59,7 @@ def check_web_assets(cold: "Cold") -> None:
     零依赖是底线，所以不强求装 node；但"没检查"必须说出来，
     不能让一片绿掩盖住"其实没验"。
     """
-    import shutil
-
-    engine = next((name for name in ("node", "deno", "bun")
-                   if shutil.which(name)), None)
+    engine = _js_engine()
     targets = [os.path.join(ROOT, "guanjia", "web", "app.js")]
     if engine is None:
         # 说清"谁在替它把关"。只写"跳过"的话，人会以为这项没人查——
