@@ -1,4 +1,4 @@
-# guanjia（管家）
+# WorksflowManagerDemo
 
 > **在终端里说人话，让它替你把工作流搭出来、并且一直跑下去。**
 > guanjia (管家) — your workflow butler in the terminal.

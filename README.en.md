@@ -1,7 +1,7 @@
-# guanjia (管家)
+# WorksflowManagerDemo
 
-> **Say what you need in your terminal; get a workflow that actually runs —
-> on schedule, and keeps running.**
+> **guanjia (管家) — say what you need in your terminal; get a workflow
+> that actually runs, on schedule, and keeps running.**
 
 You describe the need in one sentence. What comes back isn't code to wire up
 yourself — it's **something already running**: versioned, scheduled, and it
