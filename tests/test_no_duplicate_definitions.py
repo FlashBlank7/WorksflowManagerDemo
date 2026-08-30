@@ -52,3 +52,60 @@ def test_no_method_is_defined_twice_in_a_class(path: Path):
                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         repeated = {name: n for name, n in Counter(methods).items() if n > 1}
         assert not repeated, f"{path.name}::{node.name} 里重复定义：{repeated}"
+
+
+# —— 平台那侧今天挖出的第三种形状：**成组**被复制 ——
+#
+# 2026-08-30 在平台的 builder.py 抓到：反刍守卫那四句连着写了三遍，
+# 三遍在同一个 except 里顺序跑。后果不是死代码，是**算错**——
+# 一次被拒计数加 3，模型第一次被拒就被告知"这是第 3 次"。
+#
+# 先写的那条"相邻两句一模一样"抓不到它：重复的是四句一组，
+# 组与组之间隔着那个 if，任何两条**相邻**语句都不相同。
+# 客户端这边扫过是干净的（0 处），这条是防着以后。
+#
+# 门槛 3 句：两句一组的重复偶尔正当（连发两次同样的事件测去重，
+# 平台那边就有一处），三句一字不差地紧挨着出现基本只可能是复制粘贴。
+GROUP_MIN = 3
+
+
+def _statement_blocks(tree: ast.AST):
+    for node in ast.walk(tree):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(node, field, None)
+            if isinstance(block, list) and len(block) > 1:
+                yield block
+
+
+def _repeated_group(block: list):
+    dumped = [ast.dump(stmt) for stmt in block]
+    for size in range(GROUP_MIN, len(dumped) // 2 + 1):
+        for start in range(len(dumped) - 2 * size + 1):
+            if dumped[start:start + size] == dumped[start + size:start + 2 * size]:
+                return block[start].lineno, block[start + size].lineno
+    return None
+
+
+@pytest.mark.parametrize("path", MODULES, ids=lambda p: p.name)
+def test_no_group_of_statements_is_copy_pasted(path: Path):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found = []
+    for block in _statement_blocks(tree):
+        repeat = _repeated_group(block)
+        if repeat:
+            found.append(f"第 {repeat[0]} 行起的一组，在第 {repeat[1]} 行又来了一遍")
+    assert not found, f"{path.name}：{found}"
+
+
+def test_the_group_check_can_see_a_real_one():
+    """扫描器自己得抓得住——它对每个文件都断言"没有"，写坏成永远返回 None 就全绿。"""
+    body = "\n".join(["def f(x):"] + ["    a = 1", "    b = 2", "    c = 3"] * 2)
+    assert any(_repeated_group(block)
+               for block in _statement_blocks(ast.parse(body)))
+
+
+def test_the_group_check_does_not_flag_two_line_repeats():
+    body = ("async def f(s, e):\n    await s.send(e)\n    await s.wait()\n"
+            "    await s.send(e)\n    await s.wait()\n")
+    assert not any(_repeated_group(block)
+                   for block in _statement_blocks(ast.parse(body)))
