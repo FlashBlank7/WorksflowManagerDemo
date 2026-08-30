@@ -111,6 +111,24 @@ class StreamChunkTest(unittest.TestCase):
         self.assertEqual(out, f"- {BOLD}行数{RESET}: 3\n")
         self.assertEqual(pending, "")
 
+    def test_code_span_split_across_chunks_is_not_leaked(self):
+        """三个攒着的标记里，反引号那个此前没人钉。
+
+        变异验证（2026-08-30，全量 697 条）：把 `"`" in pending` 从
+        攒的判据里去掉，一条都没红——加粗和上下文标记各有一条钉着，
+        行内代码没有。漏掉的后果是同一种：半个 ` 会先冒到屏幕上，
+        下一片到了才补成代码块，看着像输出坏了。
+        """
+        out, pending = self._feed(["用 `text", "` 参数\n"])
+        self.assertEqual(out, f"用 {DIM}text{RESET} 参数\n")
+        self.assertEqual(pending, "")
+
+    def test_a_lone_backtick_holds_the_line(self):
+        """反向：只要行里还挂着一个未闭合的反引号就不能先打出去。"""
+        out, pending = self._feed(["用 `text"])
+        self.assertEqual(out, "")
+        self.assertEqual(pending, "用 `text")
+
     def test_context_marker_split_across_chunks_is_filtered(self):
         out, _ = self._feed(["<上下文 上一轮", '做了="x" />它不能发邮件\n'])
         self.assertEqual(out, "它不能发邮件\n")
